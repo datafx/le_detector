@@ -5,4 +5,8 @@
 
 void uiInit();
 void uiBootScreen();
-void uiRender(const DetectorStatus& st, bool wifiPhase);
+
+// radioLabel is the header's mode/radio indicator, e.g. "BOTH: WiFi",
+// "BOTH: BLE", "WiFi ONLY", "BLE ONLY" - caller resolves it since it depends
+// on band mode state that ui.cpp doesn't own.
+void uiRender(const DetectorStatus& st, const char* radioLabel);

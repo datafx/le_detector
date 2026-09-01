@@ -190,6 +190,16 @@ file — do not implement any of these by silently picking a default.
   the NVS read, e.g. `preferences.getUChar("bandMode", BAND_BOTH)` — an
   implementation detail, not an exposed setting.
 
+  **Header mode indicator added 2026-09-01** so a BOOT-hold actually shows
+  feedback: fixed left-aligned position in the header bar (x=70, clear of
+  ALL CLEAR/** ALERT **), reading `BOTH: WiFi` / `BOTH: BLE` (alternating
+  with the phase in dual mode) or a static `WiFi ONLY` / `BLE ONLY` in
+  single-band mode (`main.cpp` resolves the label, `uiRender()` takes it as
+  a `const char*`). Originally right-aligned, but that made the whole label
+  visibly jump left/right every phase switch in dual mode since `BOTH: WiFi`
+  and `BOTH: BLE` differ in width — left-aligned keeps the shared `BOTH: `
+  prefix planted and only the trailing word's width changes.
+
 - **Alert hold: pure decay timer, never a latch, duration depends on band
   mode. Implemented 2026-09-01** as `DUAL_MODE_HOLD_MS = 11000` /
   `SINGLE_MODE_HOLD_MS = 5500` in `config.h`; `main.cpp` resolves which one
@@ -271,15 +281,11 @@ file — do not implement any of these by silently picking a default.
   full sweep from 3.25s to 2.75s inside the existing 3.5s `WIFI_PHASE_MS`
   window (harmless — channels 1–2 just get one bonus extra look per phase).
 
-- **Header display: consider dropping the WiFi channel number.** Same
-  2026-09-01 discussion — showing `WiFi chNN` (`ui.cpp:55`) is what made the
-  hop rate look confusing/stuck in the first place. Trade-off to weigh
-  before doing this: the bring-up sequence (step 3 above) explicitly uses
-  that changing number as the diagnostic for "did the WiFi stack actually
-  come up and start hopping" — hardware bring-up already passed, so that
-  use is mostly behind us, but worth deciding deliberately rather than
-  losing it as a side effect. If accepted, it's a one-line change to a
-  static `"WiFi"` label and doesn't touch hop logic at all.
+- **Header display: drop the WiFi channel number. Implemented 2026-09-01**
+  (`ui.cpp`: static `"WiFi"`/`"BLE"` label instead of `WiFi chNN`). Confirmed
+  on hardware after flashing — much more readable at a glance. Bring-up
+  sequence step 3 updated to note `detectorChannel()` still exists for a
+  future re-bring-up if needed, just not wired into the display by default.
 
 - **Per-vendor compile-time exclude toggles.** Raised 2026-09-01 alongside the
   false positives from the first real-world test drive — CradlePoint (and

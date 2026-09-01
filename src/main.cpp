@@ -152,7 +152,12 @@ void loop() {
 
     // Display is comparatively slow, so throttle it.
     if (now - s_lastUi >= UI_REFRESH_MS) {
-        uiRender(st, s_phase == PHASE_WIFI);
+        const char* radioLabel;
+        if (s_bandMode == BAND_WIFI_ONLY)      radioLabel = "WiFi ONLY";
+        else if (s_bandMode == BAND_BLE_ONLY)  radioLabel = "BLE ONLY";
+        else radioLabel = (s_phase == PHASE_WIFI) ? "BOTH: WiFi" : "BOTH: BLE";
+
+        uiRender(st, radioLabel);
         s_lastUi = now;
     }
 }

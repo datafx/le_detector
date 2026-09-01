@@ -32,7 +32,7 @@ void uiBootScreen() {
     u8g2.sendBuffer();
 }
 
-void uiRender(const DetectorStatus& st, bool wifiPhase) {
+void uiRender(const DetectorStatus& st, const char* radioLabel) {
     u8g2.clearBuffer();
     char line[32];
 
@@ -49,12 +49,15 @@ void uiRender(const DetectorStatus& st, bool wifiPhase) {
         u8g2.drawHLine(0, 13, 128);
     }
 
-    // Radio indicator sits on the header bar, so it has to be drawn in the
-    // inverted colour while alerting or it would be white-on-white. Static
-    // label, not the live channel number - the changing digits at 250ms/hop
-    // read as "stuck" while driving rather than conveying anything useful.
+    // Radio/mode indicator sits on the header bar, so it has to be drawn in
+    // the inverted colour while alerting or it would be white-on-white.
+    // Left-aligned at a fixed x (clear of "** ALERT **", which ends at ~68)
+    // rather than right-aligned - BOTH mode's label swaps its trailing word
+    // ("BOTH: WiFi" <-> "BOTH: BLE") every phase, and right-aligning made
+    // the whole string visibly jump left/right each time. Left-aligned, the
+    // shared "BOTH: " prefix stays planted and only the tail width changes.
     u8g2.setFont(u8g2_font_5x8_tr);
-    u8g2.drawStr(88, 10, wifiPhase ? "WiFi" : "BLE");
+    u8g2.drawStr(70, 10, radioLabel);
     u8g2.setDrawColor(1);
 
     if (st.best != nullptr) {
