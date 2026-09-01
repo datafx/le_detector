@@ -6,6 +6,7 @@ static AlertState s_state       = ALERT_CLEAR;
 static uint32_t   s_period      = FLASH_PERIOD_SLOW;
 static uint32_t   s_phaseStart  = 0;
 static bool       s_outputOn    = false;
+static bool       s_muted       = false;
 
 void alertSetBuzzer(bool on) {
     bool sound = BUZZER_ENABLED && on;
@@ -21,6 +22,7 @@ void alertInit() {
     s_state      = ALERT_CLEAR;
     s_phaseStart = millis();
     s_outputOn   = false;
+    s_muted      = false;
 }
 
 // Strong signal -> short period (fast flash). Weak -> long period (slow flash).
@@ -39,25 +41,26 @@ static void driveOutputs(bool on, uint32_t onElapsed) {
     digitalWrite(PIN_LED, on ? HIGH : LOW);
 
     // Buzzer shares the LED's phase, but is capped so a fast flash chirps
-    // rather than turning into a continuous tone.
-    bool buzz = on && (onElapsed < BUZZER_MAX_ON_MS);
+    // rather than turning into a continuous tone. Muting silences only the
+    // buzzer - the LED keeps flashing as the visual cue.
+    bool buzz = on && !s_muted && (onElapsed < BUZZER_MAX_ON_MS);
     alertSetBuzzer(buzz);
 }
 
-void alertUpdate(const DetectorStatus& st) {
+void alertUpdate(const DetectorStatus& st, uint32_t holdMs) {
     uint32_t now = millis();
 
-    // Active while something matched recently, even if this scan phase happens
-    // to be looking at the other radio. BLE adverts are intermittent, so
-    // without this hold the outputs would chatter on and off.
-    bool active = (st.activeCount > 0) &&
-                  (st.lastHitMs != 0) &&
-                  (now - st.lastHitMs <= ALERT_HOLD_MS);
+    // Pure decay timer: active as long as *something* matched within the
+    // last holdMs, regardless of whether that device is still in the
+    // tracked table right now. Not a per-device latch - any qualifying
+    // receive resets the same countdown, purely to stop on/off flicker.
+    bool active = (st.lastHitMs != 0) && (now - st.lastHitMs <= holdMs);
 
     if (!active) {
         if (s_state != ALERT_CLEAR) {
             s_state    = ALERT_CLEAR;
             s_outputOn = false;
+            s_muted    = false;   // mute doesn't carry over to the next alert
             digitalWrite(PIN_LED, LOW);
             alertSetBuzzer(false);
         }
@@ -82,6 +85,10 @@ void alertUpdate(const DetectorStatus& st) {
     }
 
     driveOutputs(s_outputOn, elapsed);
+}
+
+void alertMute() {
+    if (s_state == ALERT_ACTIVE) s_muted = true;
 }
 
 AlertState alertState()     { return s_state; }

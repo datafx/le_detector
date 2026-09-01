@@ -157,16 +157,3 @@ const OuiEntry* ouiLookup(const uint8_t mac[6]) {
     }
     return nullptr;
 }
-
-const char* categoryName(GearCategory c) {
-    switch (c) {
-        case CAT_BODYCAM:  return "Body/car cam";
-        case CAT_RADIO:    return "Radio";
-        case CAT_VEHICLE:  return "Veh router";
-        case CAT_LIGHTBAR: return "Lightbar";
-        case CAT_RADAR:    return "Radar";
-        case CAT_ALPR:     return "Plate reader";
-        case CAT_OTHER:    return "Other";
-        default:           return "Unknown";
-    }
-}

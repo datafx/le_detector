@@ -42,6 +42,4 @@ struct OuiEntry {
 // Returns nullptr when the MAC's prefix is not on the watchlist.
 const OuiEntry* ouiLookup(const uint8_t mac[6]);
 
-const char* categoryName(GearCategory c);
-
 uint16_t ouiTableSize();

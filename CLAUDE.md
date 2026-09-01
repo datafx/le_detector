@@ -148,6 +148,215 @@ Breadboard wiring diagram: `esp32_breadboard_wiring.pdf`.
 
 ---
 
+## Next iteration — planned changes (not yet designed)
+
+Requested 2026-09-01 after the first real-world test drive: some local PD
+picked up correctly, some local PD missed entirely, and false positives from
+what looked like school buses and Royal Truck Equipment (plausibly SPEC_BROAD
+vendors like CradlePoint/Sierra Wireless/Motorola — common in fleet
+telematics and pupil-transportation WiFi, not just LE gear). Each item below
+needs to be locked individually before code, per the rule at the top of this
+file — do not implement any of these by silently picking a default.
+
+- **~~Revisit decision 10 (no logging)~~ — scrapped, decision 10 stands.**
+  Considered a bounded in-RAM alert-history ring buffer, reviewable on-device
+  via the BOOT button, to close the diagnosability gap. Rejected 2026-09-01:
+  not wanted in the end product, and it was pulling in real complexity —
+  specifically, fitting a third button gesture (enter/browse history)
+  alongside mute and mode-cycle on one button raised a genuine safety
+  concern (see note under the mute item below) that wasn't worth solving for
+  a feature nobody wants long-term. The actual diagnosability problem —
+  screen too small/hard to see on the current temporary mount — is being
+  solved directly by repositioning the device in the vehicle for better
+  visibility, not by adding on-device logging. Do not re-propose this.
+
+- **Band-select option: WiFi only / BLE only / both. Implemented 2026-09-01**
+  (`main.cpp`: `BandMode` enum, `applyBandMode()`/`cycleBandMode()`, NVS via
+  `Preferences` namespace `"ledet"` key `"bandMode"`). Decision 2 (one radio,
+  time-sliced) still holds — this doesn't run both bands at once, it just
+  optionally skips one phase of the alternation. Mechanism decided: runtime
+  control via hold-1s on the BOOT button, cycling WiFi-only → BLE-only →
+  both → ... **Persists across power cycles via NVS** (Arduino `Preferences`
+  library, wrapping the existing 20 KB `nvs` partition already reserved in
+  `huge_app.csv` — currently unused, no partition table change needed). This
+  is a single stored preference value, not a history/capture feature —
+  doesn't reopen decision 10.
+
+  Deliberately **not** a `config.h` constant like the real tunables
+  (`BUZZER_ACTIVE_LOW` etc.) — a constant there would imply editing it
+  changes behavior on every boot, but it would only ever apply once, on a
+  blank NVS, and silently do nothing on every boot after (NVS wins). Instead,
+  the one-time bootstrap value (**both**) is just the inline default arg to
+  the NVS read, e.g. `preferences.getUChar("bandMode", BAND_BOTH)` — an
+  implementation detail, not an exposed setting.
+
+- **Alert hold: pure decay timer, never a latch, duration depends on band
+  mode. Implemented 2026-09-01** as `DUAL_MODE_HOLD_MS = 11000` /
+  `SINGLE_MODE_HOLD_MS = 5500` in `config.h`; `main.cpp` resolves which one
+  applies each loop and passes it into `alertUpdate(st, holdMs)`, which now
+  drops the old `activeCount > 0` requirement so the decay is purely
+  time-based. Starting values per the caveat below — not field-verified yet.
+  Previously a 4 s self-clearing hold (decision 8) prevented chattering
+  on intermittent BLE adverts. Problem: in dual-band mode, the ~7 s WiFi+BLE
+  revisit cycle can outlast the hold, dropping an alert for a device that's
+  still there but simply wasn't in view during the last phase window.
+  Clarified 2026-09-01: this is **not** a latch with a revisit-check — no
+  phase/origin tracking needed at all. It's a single countdown that resets to
+  its full duration on **every** qualifying receive, regardless of whether
+  it's the same device/OUI that originally tripped it or a different one
+  (this is purely to stop on/off flicker, not per-device tracking). The alert
+  stays active exactly as long as the countdown hasn't hit zero; no separate
+  "clear" check, no indefinite hold — it always decays.
+
+  - **Dual mode (WiFi+BLE alternating):** `DUAL_MODE_HOLD_MS` ≈ **10 s+**.
+    Deliberately generous — well past the ~7 s theoretical round trip (rest
+    of current phase + full opposite phase + transition overhead) — to cover
+    missed frames/packets during the jump between bands, not just the
+    minimum needed to survive one clean round trip.
+  - **Single mode (WiFi-only or BLE-only):** `SINGLE_MODE_HOLD_MS` ≈ 5–6 s,
+    since there's no band-hop blind window to cover — this is purely to
+    smooth over BLE's intermittent duty-cycled advertising (WiFi beacons from
+    actual APs/routers are ~100 ms and rarely need this much slack).
+
+  Both are starting values, not field-verified — same caveat as the
+  phase-timing item above; expect to tune after a real test drive. A mode
+  change mid-countdown (via BOOT hold) doesn't need special-case handling —
+  the countdown just keeps running and is refreshed or expires independent of
+  which band is currently active.
+
+- **Temporary mute. Implemented 2026-09-01** (`main.cpp`: `pollButton()`
+  debounces `PIN_BOOT` and distinguishes tap vs. hold; `alertMute()` in
+  `alert.cpp`). **Implementation note, not explicitly locked before coding:**
+  mute silences the buzzer only — the LED keeps flashing — on the reasoning
+  that "mute" is an audio term and losing the visual cue on a windshield
+  alerter would undercut the point of the device. Flag if that's not what was
+  intended; swapping to silence both outputs is a one-line change in
+  `alert.cpp`'s `driveOutputs()`. Input hardware decided: the onboard **BOOT button
+  (GPIO0)** on the DevKitC — reachable on the current breadboard-on-console
+  setup, already wired with a pull-up, no new hardware needed. GPIO0 only
+  matters as a strapping pin during power-on/reset (must not be held down
+  then, or the board enters download mode instead of booting); after
+  `setup()` it's a free digital input, active-low. Needs debounce in `loop()`
+  since it's in a moving vehicle (vibration risk), not an ISR — no conflict
+  with the WiFi IRAM callback.
+
+  Gesture scheme decided: **single press = mute, press-and-hold 1s = cycle
+  band mode** (WiFi only / BLE only / both). One button covers both for now;
+  a second button is an option to revisit later if the gestures turn out to
+  be hard to hit reliably while driving, not something to add preemptively.
+
+  Mute semantics decided: mute silences only the **currently active** alert,
+  not a fixed duration and not a global "quiet mode." If that alert clears
+  (device ages out / hold expires per decision 8) and a new alert condition
+  fires afterward — same device seen again or a different one — alerting
+  resumes normally. Mute does not persist across alert instances.
+
+  Accidental-mode-change risk (a slow mute tap crossing the 1s hold
+  threshold) was raised while a third gesture (history review) was still in
+  the mix — with the plain two-gesture scheme (tap = mute, hold = mode-cycle)
+  it's not a real concern. No mitigation needed now; if 1s turns out too
+  short in practice, just extend the hold threshold.
+
+- **WiFi channel range: drop 12–13. Implemented 2026-09-01**
+  (`WIFI_MAX_CHANNEL` 13 → 11 in `config.h`). Raised 2026-09-01 — user noticed the
+  header only ever seemed to show low channel numbers and asked whether
+  hopping was actually covering all 13. It is (confirmed by reading
+  `detectorHopChannel()`/`config.h`); the appearance is a perception
+  artifact, not a bug — 250 ms/channel is too fast to read while driving,
+  and the eye tends to catch the display right as it flips from `BLE` to
+  `WiFi`, which is always freshly reset to ch1. Separately: US 2.4GHz WiFi
+  is FCC-licensed on channels 1–11 only; 12–13 are ETSI-region channels no
+  US-market AP will legally beacon on. Recommendation locked in discussion,
+  not yet applied: `WIFI_MAX_CHANNEL` 13 → 11 in `config.h`. Shortens the
+  full sweep from 3.25s to 2.75s inside the existing 3.5s `WIFI_PHASE_MS`
+  window (harmless — channels 1–2 just get one bonus extra look per phase).
+
+- **Header display: consider dropping the WiFi channel number.** Same
+  2026-09-01 discussion — showing `WiFi chNN` (`ui.cpp:55`) is what made the
+  hop rate look confusing/stuck in the first place. Trade-off to weigh
+  before doing this: the bring-up sequence (step 3 above) explicitly uses
+  that changing number as the diagnostic for "did the WiFi stack actually
+  come up and start hopping" — hardware bring-up already passed, so that
+  use is mostly behind us, but worth deciding deliberately rather than
+  losing it as a side effect. If accepted, it's a one-line change to a
+  static `"WiFi"` label and doesn't touch hop logic at all.
+
+- **Per-vendor compile-time exclude toggles.** Raised 2026-09-01 alongside the
+  false positives from the first real-world test drive — CradlePoint (and
+  potentially other `SPEC_BROAD` vendors like Sierra Wireless, Motorola)
+  showing up on school buses and commercial vehicles doing fleet telematics,
+  not LE gear. Decided: don't strip these from the shared table, since they're
+  legitimately used by LE too and useful for the maintainer's own testing.
+  Instead, give users a way to opt individual vendors out before they compile.
+  Mechanism recommended in discussion, not yet applied: a block of
+  commented-out `#define EXCLUDE_VENDOR_<NAME>` toggles near the top of
+  `oui_table.cpp`, with the relevant entries wrapped in
+  `#ifndef EXCLUDE_VENDOR_<NAME>`. Defaults to include-everything (no edits =
+  current behavior); uncommenting one define before `pio run` drops that
+  vendor. Keeps the table's sort order intact either way (removing rows can't
+  break the binary search), so no test/tooling changes needed for this part.
+
+- **User-addable OUI staging table**, for someone testing an OUI locally
+  before submitting it upstream as a PR. Raised 2026-09-01 in the same
+  discussion. Mechanism recommended, not yet applied: a separate file (e.g.
+  `user_oui_table.cpp`) using the *same* `OuiEntry` struct as the main table,
+  shipping as an empty array with one commented-out example row showing the
+  field layout. Lookup order: binary search the main table first as today,
+  then linear-scan the (small, unsorted) user table as a fallback — staging
+  entries don't need to be manually sorted, unlike the main table. Confidence
+  default for staged entries: capped at MEDIUM (`SPEC_BROAD`-style) unless the
+  user explicitly sets `SPEC_LE_ONLY` on their own entry — same reasoning as
+  decision 7, an unvetted self-added OUI shouldn't be able to reach HIGH
+  confidence by default. Promotion path once someone's ready to open a PR:
+  cut the row out of the staging file and paste it into `oui_table.cpp` at the
+  correct sorted position — same struct/fields, no reformatting — and add a
+  matching case to `test/test_oui.cpp`.
+
+---
+
+## Future ideas (beyond next iteration)
+
+Deliberately kept separate from "Next iteration — planned changes" above —
+these are things discussed and worth keeping, but not queued for the current
+round of work. Same rule applies when they do get picked up: lock each open
+sub-decision before writing code.
+
+- **SSID matching from beacon frames and/or probe requests**, as a signal
+  independent of OUI matching. Discussed 2026-09-01. Not a reversal of
+  decision 5 (that was about not *dropping* frames with an empty SSID, not
+  about never using SSID content).
+
+  - **Beacon SSID** = the network name an AP broadcasts. Matching this against
+    a watchlist (e.g. a known agency network-naming pattern) is additive
+    coverage independent of whether that AP's OUI happens to be in the
+    watchlist at all.
+  - **Probe request SSID** = a client device leaking a network it previously
+    joined, not evidence the network is nearby now. Modern phone OSes
+    (iOS/Android, post ~2014-2017) mostly suppress directed probes now
+    (randomized MAC + wildcard/no-SSID probes), so this signal increasingly
+    only catches older/embedded hardware, not phones. Lower, shrinking value
+    versus beacon-SSID matching — worth doing but not the priority half of
+    this feature if only one gets built first.
+  - **Match semantics locked**: prefix-only (trailing wildcard), e.g.
+    `PSP-troop*` matches `PSP-troop7`, `PSP-troop8`, etc. Deliberately not
+    full glob (no leading/embedded wildcards) — narrower implementation
+    (plain `strncmp` against the pattern length, no regex/glob engine, no
+    dynamic allocation), matches the only concrete example raised, and easy
+    to extend later if a real case needs more than a trailing wildcard.
+  - **Case sensitivity locked**: case-sensitive exact-byte match. No
+    normalization needed.
+  - **Table shape**: a separate flat list of literal prefix strings, linear
+    scan per parsed SSID (not the OUI table's sorted/masked/binary-search
+    structure — that machinery is for MAC prefixes specifically, and a small
+    curated SSID list doesn't need it).
+  - **Still open, not yet locked**: (1) where the match runs — inline in the
+    `IRAM_ATTR` WiFi promiscuous callback (cheap, but that callback has an
+    explicit "keep it short" rule in Gotchas) vs. deferred to the main loop;
+    (2) how an SSID hit feeds the confidence model — same MEDIUM/HIGH scheme
+    as decision 7, or a separate/lower-trust signal track.
+
+---
+
 ## Layout
 
 ```
@@ -208,9 +417,20 @@ Validate in this order; don't skip ahead when something fails.
 2. **Power-on self test** — LED + buzzer pulse ~120 ms in `setup()`. Confirms
    both outputs and that they fire together.
 3. **Radio phase indicator** — top-right of the display should alternate between
-   `WiFi chNN` (cycling 1→13) and `BLE`. If it sticks, a stack failed to init.
-4. **Frames seen counter** — on the idle screen. Should climb steadily anywhere
-   near WiFi. If it stays at 0, promiscuous mode isn't running.
+   `WiFi` and `BLE`. Static labels as of 2026-09-01 (previously `WiFi chNN`
+   cycling 1→13; the live channel number read as "stuck" while driving more
+   than it conveyed useful info). If it sticks on one label, a stack failed to
+   init. `detectorChannel()` in `detector.cpp` still tracks the real channel
+   (drives `esp_wifi_set_channel`) even though it's no longer displayed — wire
+   it back into `uiRender()` temporarily if a future bring-up needs to see it
+   cycling to confirm the hop logic itself.
+4. **Frames seen counter** — `detectorSeenTotal()` in `detector.cpp`, no longer
+   shown on the idle screen (dropped 2026-09-01 in the display redesign below,
+   in favor of a bigger vendor name). Should climb steadily anywhere near
+   WiFi. If it stays at 0, promiscuous mode isn't running. The counter itself
+   is still tracked internally; if a future bring-up needs to see it again,
+   temporarily wire it back into `uiRender()` for that session rather than
+   restoring it to the shipped UI permanently.
 5. **Alert path** — with only Axon in the table you likely won't trip it
    naturally. To test the LED/buzzer/display path, temporarily add the OUI of a
    device you own (phone hotspot, laptop) as a `CAT_OTHER` entry, confirm the

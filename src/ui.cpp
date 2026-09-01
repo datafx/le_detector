@@ -50,24 +50,43 @@ void uiRender(const DetectorStatus& st, bool wifiPhase) {
     }
 
     // Radio indicator sits on the header bar, so it has to be drawn in the
-    // inverted colour while alerting or it would be white-on-white.
+    // inverted colour while alerting or it would be white-on-white. Static
+    // label, not the live channel number - the changing digits at 250ms/hop
+    // read as "stuck" while driving rather than conveying anything useful.
     u8g2.setFont(u8g2_font_5x8_tr);
-    if (wifiPhase) snprintf(line, sizeof(line), "WiFi ch%02u", (unsigned)detectorChannel());
-    else           snprintf(line, sizeof(line), "BLE");
-    u8g2.drawStr(88, 10, line);
+    u8g2.drawStr(88, 10, wifiPhase ? "WiFi" : "BLE");
     u8g2.setDrawColor(1);
 
     if (st.best != nullptr) {
-        // --- vendor / category ---
-        snprintf(line, sizeof(line), "%s", st.best->vendor);
-        u8g2.setFont(u8g2_font_6x10_tr);
-        u8g2.drawStr(0, 26, line);
+        // --- vendor name, as large as fits: try biggest font first, drop
+        // down a tier only if the name is too wide for the display. Short
+        // names (e.g. "AXON") end up much larger than long ones (e.g.
+        // "Sierra Wireless") instead of everything sharing one small size.
+        static const uint8_t* const kVendorFonts[] = {
+            u8g2_font_helvB24_tr,
+            u8g2_font_helvB18_tr,
+            u8g2_font_helvB14_tr,
+            u8g2_font_helvB10_tr,
+            u8g2_font_6x10_tr,   // guaranteed-fit fallback
+        };
+        const int kVendorFontCount = sizeof(kVendorFonts) / sizeof(kVendorFonts[0]);
+        const int kVendorMaxWidthPx = 126;
 
-        u8g2.setFont(u8g2_font_5x8_tr);
-        snprintf(line, sizeof(line), "%s  %s",
-                 categoryName(st.best->category),
-                 st.best->source == SRC_WIFI ? "WiFi" : "BLE");
-        u8g2.drawStr(0, 36, line);
+        int fontIdx = kVendorFontCount - 1;
+        for (int i = 0; i < kVendorFontCount; i++) {
+            u8g2.setFont(kVendorFonts[i]);
+            if (u8g2.getStrWidth(st.best->vendor) <= kVendorMaxWidthPx) {
+                fontIdx = i;
+                break;
+            }
+        }
+        u8g2.setFont(kVendorFonts[fontIdx]);
+
+        // Vertically center in the band between the header and the RSSI bar.
+        const int bandTop = 14, bandH = 36;
+        int textH = u8g2.getAscent() - u8g2.getDescent();
+        int y = bandTop + (bandH - textH) / 2 + u8g2.getAscent();
+        u8g2.drawStr(0, y, st.best->vendor);
 
         // --- signal strength bar ---
         int16_t r = st.bestRssi;
@@ -75,27 +94,17 @@ void uiRender(const DetectorStatus& st, bool wifiPhase) {
         if (r > RSSI_STRONG) r = RSSI_STRONG;
         int barW = (int)(((int32_t)r - RSSI_WEAK) * 100 /
                          ((int32_t)RSSI_STRONG - RSSI_WEAK));
-        u8g2.drawFrame(0, 40, 102, 9);
-        if (barW > 0) u8g2.drawBox(1, 41, barW, 7);
+        u8g2.drawFrame(0, 50, 102, 9);
+        if (barW > 0) u8g2.drawBox(1, 51, barW, 7);
 
+        u8g2.setFont(u8g2_font_5x8_tr);
         snprintf(line, sizeof(line), "%ddB", (int)st.bestRssi);
-        u8g2.drawStr(104, 48, line);
-
-        // --- confidence + count ---
-        // "LE" marks a vendor that sells essentially only to law enforcement;
-        // "gen" marks a broad-market vendor that also ships civilian gear.
-        snprintf(line, sizeof(line), "%s %s  %u dev",
-                 st.bestConfidence == CONF_HIGH ? "HIGH" : "MED ",
-                 st.best->specificity == SPEC_LE_ONLY ? "LE " : "gen",
-                 (unsigned)st.activeCount);
-        u8g2.drawStr(0, 60, line);
+        u8g2.drawStr(104, 58, line);
     } else {
         u8g2.setFont(u8g2_font_5x8_tr);
         u8g2.drawStr(0, 30, "No matched gear");
-        snprintf(line, sizeof(line), "Frames seen: %u", (unsigned)detectorSeenTotal());
-        u8g2.drawStr(0, 42, line);
         snprintf(line, sizeof(line), "Watchlist: %u OUI", (unsigned)ouiTableSize());
-        u8g2.drawStr(0, 54, line);
+        u8g2.drawStr(0, 44, line);
     }
 
     u8g2.sendBuffer();
