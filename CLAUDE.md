@@ -287,36 +287,37 @@ file — do not implement any of these by silently picking a default.
   sequence step 3 updated to note `detectorChannel()` still exists for a
   future re-bring-up if needed, just not wired into the display by default.
 
-- **Per-vendor compile-time exclude toggles.** Raised 2026-09-01 alongside the
-  false positives from the first real-world test drive — CradlePoint (and
-  potentially other `SPEC_BROAD` vendors like Sierra Wireless, Motorola)
-  showing up on school buses and commercial vehicles doing fleet telematics,
-  not LE gear. Decided: don't strip these from the shared table, since they're
-  legitimately used by LE too and useful for the maintainer's own testing.
-  Instead, give users a way to opt individual vendors out before they compile.
-  Mechanism recommended in discussion, not yet applied: a block of
-  commented-out `#define EXCLUDE_VENDOR_<NAME>` toggles near the top of
-  `oui_table.cpp`, with the relevant entries wrapped in
-  `#ifndef EXCLUDE_VENDOR_<NAME>`. Defaults to include-everything (no edits =
-  current behavior); uncommenting one define before `pio run` drops that
-  vendor. Keeps the table's sort order intact either way (removing rows can't
-  break the binary search), so no test/tooling changes needed for this part.
+- **Per-vendor compile-time exclude toggles. Implemented 2026-09-01**
+  (`oui_table.cpp`: `EXCLUDE_VENDOR_CRADLEPOINT` / `_SIERRA_WIRELESS` /
+  `_MOTOROLA`, all commented out by default, each relevant row wrapped in
+  `#ifndef EXCLUDE_VENDOR_<NAME>`). Raised alongside the false positives from
+  the first real-world test drive — CradlePoint (and potentially other
+  `SPEC_BROAD` vendors like Sierra Wireless, Motorola) showing up on school
+  buses and commercial vehicles doing fleet telematics, not LE gear. Decided:
+  don't strip these from the shared table, since they're legitimately used
+  by LE too and useful for the maintainer's own testing — instead, give
+  users a way to opt individual vendors out before they compile. Table sort
+  order is unaffected either way (removing rows can't break the binary
+  search); verified with `-DEXCLUDE_VENDOR_CRADLEPOINT` that table size drops
+  and lookups for that vendor return `nullptr`. Only these three vendors got
+  toggles (the ones actually named as suspected false-positive sources) —
+  not all 40+ table vendors; copy the same `#ifndef` pattern for another
+  vendor if one shows up as a problem later.
 
-- **User-addable OUI staging table**, for someone testing an OUI locally
-  before submitting it upstream as a PR. Raised 2026-09-01 in the same
-  discussion. Mechanism recommended, not yet applied: a separate file (e.g.
-  `user_oui_table.cpp`) using the *same* `OuiEntry` struct as the main table,
-  shipping as an empty array with one commented-out example row showing the
-  field layout. Lookup order: binary search the main table first as today,
-  then linear-scan the (small, unsorted) user table as a fallback — staging
-  entries don't need to be manually sorted, unlike the main table. Confidence
-  default for staged entries: capped at MEDIUM (`SPEC_BROAD`-style) unless the
-  user explicitly sets `SPEC_LE_ONLY` on their own entry — same reasoning as
-  decision 7, an unvetted self-added OUI shouldn't be able to reach HIGH
-  confidence by default. Promotion path once someone's ready to open a PR:
-  cut the row out of the staging file and paste it into `oui_table.cpp` at the
-  correct sorted position — same struct/fields, no reformatting — and add a
-  matching case to `test/test_oui.cpp`.
+- **User-addable OUI staging table. Implemented 2026-09-01**
+  (`src/user_oui_table.cpp`), for someone testing an OUI locally before
+  submitting it upstream as a PR. Same `OuiEntry` struct as the main table,
+  ships as an empty array with one commented-out example row showing the
+  field layout — see that file's header comment for the full promotion
+  workflow. `ouiLookup()` in `oui_table.cpp` now falls back to
+  `ouiUserLookup()` (linear scan, no sorting needed) whenever the main
+  table's binary search comes up empty; `detector.cpp` and every other
+  caller are unchanged, they still just call `ouiLookup()`. Confidence for
+  staged entries is capped at MEDIUM (`SPEC_BROAD`-style) unless the user
+  explicitly sets `SPEC_LE_ONLY` — same reasoning as decision 7. Verified:
+  uncommenting the example row makes `ouiLookup()` find it via the fallback
+  path; existing `test/test_oui.cpp` suite still passes unchanged (the
+  staging table is empty by default, so it never intercepts anything).
 
 ---
 
@@ -379,6 +380,8 @@ src/
   alert.cpp       RSSI -> flash period, synced LED+buzzer drive
   ui.cpp          status screen
   oui_table.cpp   THE WATCHLIST
+  user_oui_table.cpp  empty-by-default staging table for testing an OUI
+                      locally before submitting it as a PR (see below)
 ```
 
 All tuning lives in `config.h`. Prefer changing constants there over editing
@@ -388,17 +391,23 @@ logic.
 
 ## Testing the OUI table off-target
 
-`src/oui_table.cpp` has no Arduino dependency, so it compiles and runs on the
-host. Worth re-running after any table edit:
+`src/oui_table.cpp` and `src/user_oui_table.cpp` have no Arduino dependency,
+so they compile and run on the host. Worth re-running after any table edit:
 
 ```bash
-g++ -std=c++11 -o /tmp/test_oui test/test_oui.cpp src/oui_table.cpp -I include
+g++ -std=c++11 -o /tmp/test_oui test/test_oui.cpp src/oui_table.cpp src/user_oui_table.cpp -I include
 /tmp/test_oui
 ```
 
 Covers the anchor entry, first/last rows, an unknown prefix, the /28 and /36
 in-block / out-of-block boundaries, and disambiguation of two vendors sharing
 the `70:B3:D5` block. 25 assertions, all passing as of handoff.
+
+To test a per-vendor exclude toggle, add `-DEXCLUDE_VENDOR_CRADLEPOINT` (or
+whichever) to the `g++` line and confirm `ouiTableSize()` drops and that
+vendor's lookups return `nullptr`. To test the user staging table, uncomment
+a row in `user_oui_table.cpp` and confirm `ouiLookup()` finds it via the
+fallback path.
 
 ## Build
 

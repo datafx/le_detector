@@ -2,6 +2,12 @@
 #include "oui_table.h"
 #include <string.h>
 
+// Defined in user_oui_table.cpp - a small unsorted staging table for OUIs
+// someone's testing locally before submitting them as a PR into the main
+// table below. Linear-scanned as a fallback once the main table's binary
+// search comes up empty.
+extern const OuiEntry* ouiUserLookup(const uint8_t mac[6]);
+
 // ---------------------------------------------------------------------------
 // LAW ENFORCEMENT EQUIPMENT WATCHLIST
 //
@@ -46,9 +52,28 @@
 // Table body is generated sorted; re-run test/test_oui.cpp after any edit.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Per-vendor compile-time excludes
+//
+// These are real LE suppliers (SPEC_BROAD), but their prefixes also ship on
+// huge volumes of civilian fleet/telematics gear - CradlePoint routers
+// (and possibly Sierra Wireless / Motorola) turned up on what looked like a
+// school bus and a commercial truck fleet during the first real-world test
+// drive (2026-09-01). Uncomment a line below before `pio run` to drop that
+// vendor from your build. Default is to include everything (this list ships
+// entirely commented out); removing entries doesn't affect the table's sort
+// order or the binary search, so nothing else needs to change.
+//
+// #define EXCLUDE_VENDOR_CRADLEPOINT
+// #define EXCLUDE_VENDOR_SIERRA_WIRELESS
+// #define EXCLUDE_VENDOR_MOTOROLA
+// ---------------------------------------------------------------------------
+
 static const OuiEntry OUI_TABLE[] = {
   { { 0x00,0x00,0xC3,0x00,0x00 }, 24, "Harris",           CAT_RADIO,     SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0x00,0x04,0x7D,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
+#endif
   { { 0x00,0x06,0xEC,0x00,0x00 }, 24, "Harris",           CAT_RADIO,     SPEC_BROAD      },
   { { 0x00,0x08,0xB8,0x00,0x00 }, 24, "EF Johnson",       CAT_RADIO,     SPEC_LE_ONLY    },
   { { 0x00,0x09,0xBC,0x00,0x00 }, 24, "Utility Inc",      CAT_BODYCAM,   SPEC_LE_ONLY    },
@@ -63,12 +88,16 @@ static const OuiEntry OUI_TABLE[] = {
   { { 0x00,0x17,0x28,0x00,0x00 }, 24, "Selex Comms",      CAT_RADIO,     SPEC_BROAD      },
   { { 0x00,0x17,0x3D,0x00,0x00 }, 24, "Neology",          CAT_ALPR,      SPEC_BROAD      },
   { { 0x00,0x17,0xF3,0x00,0x00 }, 24, "Harris",           CAT_RADIO,     SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0x00,0x18,0x85,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
+#endif
   { { 0x00,0x1A,0x08,0x00,0x00 }, 24, "Simoco",           CAT_RADIO,     SPEC_BROAD      },
   { { 0x00,0x1C,0x3C,0x00,0x00 }, 24, "Seon Design",      CAT_BODYCAM,   SPEC_LE_ONLY    },
   { { 0x00,0x1D,0x96,0x00,0x00 }, 24, "WatchGuard Vid",   CAT_BODYCAM,   SPEC_LE_ONLY    },
   { { 0x00,0x1E,0x96,0x00,0x00 }, 24, "Sepura",           CAT_RADIO,     SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0x00,0x1F,0x92,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
+#endif
   { { 0x00,0x1F,0x9C,0x00,0x00 }, 24, "Havis",            CAT_VEHICLE,   SPEC_BROAD      },
   { { 0x00,0x22,0xAF,0x00,0x00 }, 24, "Safety Vision",    CAT_BODYCAM,   SPEC_BROAD      },
   { { 0x00,0x23,0xB9,0x00,0x00 }, 24, "Airbus D&S",       CAT_RADIO,     SPEC_BROAD      },
@@ -77,37 +106,61 @@ static const OuiEntry OUI_TABLE[] = {
   { { 0x00,0x24,0xE6,0x00,0x00 }, 24, "In Motion Tech",   CAT_VEHICLE,   SPEC_BROAD      },
   { { 0x00,0x25,0xDF,0x00,0x00 }, 24, "Axon",             CAT_BODYCAM,   SPEC_LE_ONLY    },
   { { 0x00,0x26,0xB3,0x00,0x00 }, 24, "Thales",           CAT_RADIO,     SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_CRADLEPOINT
   { { 0x00,0x30,0x44,0x00,0x00 }, 24, "CradlePoint",      CAT_VEHICLE,   SPEC_BROAD      },
+#endif
   { { 0x00,0x30,0x7E,0x00,0x00 }, 24, "Redflex",          CAT_ALPR,      SPEC_LE_ONLY    },
   { { 0x00,0x90,0xC7,0x00,0x00 }, 24, "Icom",             CAT_RADIO,     SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_SIERRA_WIRELESS
   { { 0x00,0xA0,0xD5,0x00,0x00 }, 24, "Sierra Wireless",  CAT_VEHICLE,   SPEC_BROAD      },
+#endif
   { { 0x00,0xBF,0x15,0x00,0x00 }, 24, "Genetec",          CAT_ALPR,      SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_CRADLEPOINT
   { { 0x00,0xE0,0x1C,0x00,0x00 }, 24, "CradlePoint",      CAT_VEHICLE,   SPEC_BROAD      },
+#endif
   { { 0x08,0x3C,0x03,0x00,0x00 }, 28, "Federal Signal",   CAT_LIGHTBAR,  SPEC_LE_ONLY    },
   { { 0x0C,0xBF,0x15,0x00,0x00 }, 24, "Genetec",          CAT_ALPR,      SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0x10,0x74,0x6F,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
+#endif
   { { 0x1C,0x82,0x59,0xD0,0x00 }, 28, "Stalker Radar",    CAT_RADAR,     SPEC_LE_ONLY    },
+#ifndef EXCLUDE_VENDOR_SIERRA_WIRELESS
   { { 0x28,0xA3,0x31,0x00,0x00 }, 24, "Sierra Wireless",  CAT_VEHICLE,   SPEC_BROAD      },
+#endif
   { { 0x38,0x73,0xEA,0x00,0x00 }, 28, "L3 MobileVis",     CAT_BODYCAM,   SPEC_LE_ONLY    },
   { { 0x48,0x46,0x8D,0x00,0x00 }, 24, "Zepcam",           CAT_BODYCAM,   SPEC_LE_ONLY    },
+#ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0x4C,0xCC,0x34,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
+#endif
+#ifndef EXCLUDE_VENDOR_SIERRA_WIRELESS
   { { 0x50,0x13,0x9D,0x00,0x00 }, 24, "Sierra Wireless",  CAT_VEHICLE,   SPEC_BROAD      },
+#endif
   { { 0x58,0x94,0xCF,0x00,0x00 }, 24, "Vertex Std LMR",   CAT_RADIO,     SPEC_BROAD      },
   { { 0x58,0xE8,0x76,0xC0,0x00 }, 28, "Kustom Signals",   CAT_RADAR,     SPEC_LE_ONLY    },
   { { 0x64,0x69,0xBC,0x00,0x00 }, 24, "Hytera",           CAT_RADIO,     SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_SIERRA_WIRELESS
   { { 0x64,0xCE,0x6E,0x00,0x00 }, 24, "Sierra Wireless",  CAT_VEHICLE,   SPEC_BROAD      },
+#endif
   { { 0x68,0xDA,0x73,0xB0,0x00 }, 28, "Gamber-Johnson",   CAT_VEHICLE,   SPEC_BROAD      },
   { { 0x6C,0x18,0x11,0x00,0x00 }, 24, "Decatur Elec",     CAT_RADAR,     SPEC_LE_ONLY    },
   { { 0x70,0xB3,0xD5,0x1C,0x50 }, 36, "ELSAG",            CAT_ALPR,      SPEC_LE_ONLY    },
   { { 0x70,0xB3,0xD5,0x88,0xA0 }, 36, "Perceptics",       CAT_ALPR,      SPEC_LE_ONLY    },
+#ifndef EXCLUDE_VENDOR_SIERRA_WIRELESS
   { { 0x84,0xDB,0x2F,0x00,0x00 }, 24, "Sierra Wireless",  CAT_VEHICLE,   SPEC_BROAD      },
+#endif
   { { 0x9C,0x06,0x6E,0x00,0x00 }, 24, "Hytera",           CAT_RADIO,     SPEC_BROAD      },
   { { 0x9C,0x83,0xBF,0x00,0x00 }, 24, "PRO-VISION",       CAT_BODYCAM,   SPEC_LE_ONLY    },
+#ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0x9C,0x86,0x2B,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
+#endif
   { { 0xA8,0xC0,0xEA,0x00,0x00 }, 24, "Pepwave",          CAT_VEHICLE,   SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0xB8,0xE2,0x8C,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
+#endif
   { { 0xBC,0xAD,0x90,0x00,0x00 }, 24, "Kymeta",           CAT_VEHICLE,   SPEC_BROAD      },
+#ifndef EXCLUDE_VENDOR_SIERRA_WIRELESS
   { { 0xCC,0x93,0x4A,0x00,0x00 }, 24, "Sierra Wireless",  CAT_VEHICLE,   SPEC_BROAD      },
+#endif
   { { 0xD4,0x13,0xF8,0x00,0x00 }, 24, "Peplink",          CAT_VEHICLE,   SPEC_BROAD      },
   { { 0xE0,0xDA,0xDC,0x00,0x00 }, 24, "JVC Kenwood",      CAT_RADIO,     SPEC_BROAD      },
   { { 0xE4,0x1E,0x0A,0xB0,0x00 }, 28, "Safety Vision",    CAT_BODYCAM,   SPEC_BROAD      },
@@ -144,7 +197,7 @@ const OuiEntry* ouiLookup(const uint8_t mac[6]) {
         if (c < 0)  hi = mid - 1;
         else        lo = mid + 1;
     }
-    if (found < 0) return nullptr;
+    if (found < 0) return ouiUserLookup(mac);
 
     // Several vendors can share the same three bytes when a block is carved
     // into /28 or /36 assignments, so walk the whole run.
@@ -155,5 +208,5 @@ const OuiEntry* ouiLookup(const uint8_t mac[6]) {
         if (cmp3(OUI_TABLE[i].prefix, mac) != 0) break;
         if (matches(OUI_TABLE[i], mac)) return &OUI_TABLE[i];
     }
-    return nullptr;
+    return ouiUserLookup(mac);
 }
