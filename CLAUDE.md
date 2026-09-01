@@ -146,6 +146,26 @@ Breadboard wiring diagram: `esp32_breadboard_wiring.pdf`.
   ~200–400 ms of stack transitions means a ~7 s revisit interval. At 65 mph
   that's ~670 ft between looks at either band. Untested; may need shortening.
 
+- **Intermittent double-boot on power-up.** Reported 2026-09-01: sometimes
+  the board resets/boots twice before settling into normal operation.
+  Happens both connected to a PC via USB and on standalone power, which
+  rules out the CP2102's normal DTR/RTS auto-reset behavior (that only
+  applies when a host is toggling those lines) as the sole explanation.
+  Leading hypotheses, neither confirmed: a brownout reset from the WiFi
+  radio's current draw sagging a marginal power supply, or EN-pin noise at
+  power-on (EN is deliberately unwired per the hardware notes above — just
+  the onboard pull-up, no external decoupling capacitor). Attempted to catch
+  it via a serial capture of the ROM bootloader's reset-reason banner (which
+  would say `RTCWDT_BROWN_OUT_RESET` vs. a repeated `POWERON_RESET` and
+  settle which one it is), but didn't reproduce it in two attempts — both
+  showed a single clean `POWERON_RESET`. User called it a minor issue;
+  deferred, not queued. Revisit by repeating the serial capture across more
+  power cycles (`python3` + `pyserial` with `dtr=False, rts=False` on open —
+  a plain `cat`/`stty` open was found to hold the board in reset the whole
+  time, producing a solid stream of null bytes instead of real boot output),
+  or by physical means: try a different power source/cable to rule out
+  brownout, or add a 100nF-10µF cap between EN and GND to rule out EN noise.
+
 ---
 
 ## Next iteration — planned changes (not yet designed)
@@ -192,13 +212,14 @@ file — do not implement any of these by silently picking a default.
 
   **Header mode indicator added 2026-09-01** so a BOOT-hold actually shows
   feedback: fixed left-aligned position in the header bar (x=70, clear of
-  ALL CLEAR/** ALERT **), reading `BOTH: WiFi` / `BOTH: BLE` (alternating
-  with the phase in dual mode) or a static `WiFi ONLY` / `BLE ONLY` in
-  single-band mode (`main.cpp` resolves the label, `uiRender()` takes it as
-  a `const char*`). Originally right-aligned, but that made the whole label
-  visibly jump left/right every phase switch in dual mode since `BOTH: WiFi`
-  and `BOTH: BLE` differ in width — left-aligned keeps the shared `BOTH: `
-  prefix planted and only the trailing word's width changes.
+  ALL CLEAR/** ALERT **), reading `AUTO: WiFi` / `AUTO: BLE` (alternating
+  with the phase in dual mode — relabeled from `BOTH:` after the first pass)
+  or a static `WiFi ONLY` / `BLE ONLY` in single-band mode (`main.cpp`
+  resolves the label, `uiRender()` takes it as a `const char*`). Originally
+  right-aligned, but that made the whole label visibly jump left/right every
+  phase switch in dual mode since the two variants differ in width —
+  left-aligned keeps the shared `AUTO: ` prefix planted and only the
+  trailing word's width changes.
 
 - **Alert hold: pure decay timer, never a latch, duration depends on band
   mode. Implemented 2026-09-01** as `DUAL_MODE_HOLD_MS = 11000` /
