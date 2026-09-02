@@ -346,6 +346,21 @@ file — do not implement any of these by silently picking a default.
   not all 40+ table vendors; copy the same `#ifndef` pattern for another
   vendor if one shows up as a problem later.
 
+  **CradlePoint flipped to excluded by default, 2026-09-02.** A second
+  real-world test drive reported zero true positives on PD vehicles and a
+  steady stream of false positives — school buses and cellular PTZ cameras
+  on the turnpike, both ordinary CradlePoint fleet-router customers.
+  `#define EXCLUDE_VENDOR_CRADLEPOINT` in `oui_table.cpp` is now uncommented
+  (table size 65 → 63; verified via `test/test_oui.cpp`, all 25 assertions
+  still pass). Sierra Wireless and Motorola are untouched — no false-positive
+  reports against them specifically yet. This is a shipped-default change,
+  not just a build-time knob: someone who wants CradlePoint back in must
+  comment the `#define` back out (see the block comment above the toggles
+  in `oui_table.cpp` for the "only if you've confirmed it locally" guidance)
+  rather than opt into excluding it. If Sierra Wireless or Motorola produce
+  the same kind of report, apply the same reasoning rather than leaving them
+  included on the theory that CradlePoint was a one-off.
+
 - **User-addable OUI staging table. Implemented 2026-09-01**
   (`src/user_oui_table.cpp`), for someone testing an OUI locally before
   submitting it upstream as a PR. Same `OuiEntry` struct as the main table,
@@ -445,11 +460,13 @@ Covers the anchor entry, first/last rows, an unknown prefix, the /28 and /36
 in-block / out-of-block boundaries, and disambiguation of two vendors sharing
 the `70:B3:D5` block. 25 assertions, all passing as of handoff.
 
-To test a per-vendor exclude toggle, add `-DEXCLUDE_VENDOR_CRADLEPOINT` (or
-whichever) to the `g++` line and confirm `ouiTableSize()` drops and that
-vendor's lookups return `nullptr`. To test the user staging table, uncomment
-a row in `user_oui_table.cpp` and confirm `ouiLookup()` finds it via the
-fallback path.
+To test a per-vendor exclude toggle, add `-DEXCLUDE_VENDOR_SIERRA_WIRELESS`
+(or `_MOTOROLA`) to the `g++` line and confirm `ouiTableSize()` drops and
+that vendor's lookups return `nullptr`. CradlePoint is excluded by default
+now (see above) — its `#define` lives directly in `oui_table.cpp`, not a
+build flag, so to test it *re-included* comment that line back out instead.
+To test the user staging table, uncomment a row in `user_oui_table.cpp` and
+confirm `ouiLookup()` finds it via the fallback path.
 
 ## Build
 

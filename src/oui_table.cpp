@@ -56,15 +56,20 @@ extern const OuiEntry* ouiUserLookup(const uint8_t mac[6]);
 // Per-vendor compile-time excludes
 //
 // These are real LE suppliers (SPEC_BROAD), but their prefixes also ship on
-// huge volumes of civilian fleet/telematics gear - CradlePoint routers
-// (and possibly Sierra Wireless / Motorola) turned up on what looked like a
-// school bus and a commercial truck fleet during the first real-world test
-// drive (2026-09-01). Uncomment a line below before `pio run` to drop that
-// vendor from your build. Default is to include everything (this list ships
-// entirely commented out); removing entries doesn't affect the table's sort
-// order or the binary search, so nothing else needs to change.
+// huge volumes of civilian fleet/telematics gear. Comment a line back out
+// before `pio run` to bring that vendor back into your build. Removing
+// entries doesn't affect the table's sort order or the binary search, so
+// nothing else needs to change.
 //
-// #define EXCLUDE_VENDOR_CRADLEPOINT
+// CRADLEPOINT IS EXCLUDED BY DEFAULT (2026-09-02): a second real-world test
+// drive turned up zero true positives on PD vehicles and a steady stream of
+// false positives - school buses and cellular PTZ cameras on the turnpike,
+// both ordinary CradlePoint fleet-router customers. It's real LE gear too,
+// so the toggle is here, not a table deletion - only re-enable it (comment
+// the #define back out) if you've independently confirmed CradlePoint gear
+// on vehicles you care about detecting; on unfiltered general-purpose
+// patrol, its false-positive rate outweighs its signal.
+#define EXCLUDE_VENDOR_CRADLEPOINT
 // #define EXCLUDE_VENDOR_SIERRA_WIRELESS
 // #define EXCLUDE_VENDOR_MOTOROLA
 // ---------------------------------------------------------------------------
