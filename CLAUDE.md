@@ -146,25 +146,46 @@ Breadboard wiring diagram: `esp32_breadboard_wiring.pdf`.
   ~200–400 ms of stack transitions means a ~7 s revisit interval. At 65 mph
   that's ~670 ft between looks at either band. Untested; may need shortening.
 
-- **Intermittent double-boot on power-up.** Reported 2026-09-01: sometimes
-  the board resets/boots twice before settling into normal operation.
-  Happens both connected to a PC via USB and on standalone power, which
-  rules out the CP2102's normal DTR/RTS auto-reset behavior (that only
-  applies when a host is toggling those lines) as the sole explanation.
-  Leading hypotheses, neither confirmed: a brownout reset from the WiFi
-  radio's current draw sagging a marginal power supply, or EN-pin noise at
-  power-on (EN is deliberately unwired per the hardware notes above — just
-  the onboard pull-up, no external decoupling capacitor). Attempted to catch
-  it via a serial capture of the ROM bootloader's reset-reason banner (which
-  would say `RTCWDT_BROWN_OUT_RESET` vs. a repeated `POWERON_RESET` and
-  settle which one it is), but didn't reproduce it in two attempts — both
-  showed a single clean `POWERON_RESET`. User called it a minor issue;
-  deferred, not queued. Revisit by repeating the serial capture across more
-  power cycles (`python3` + `pyserial` with `dtr=False, rts=False` on open —
-  a plain `cat`/`stty` open was found to hold the board in reset the whole
-  time, producing a solid stream of null bytes instead of real boot output),
-  or by physical means: try a different power source/cable to rule out
-  brownout, or add a 100nF-10µF cap between EN and GND to rule out EN noise.
+- **Reset-loop bursts, root cause probably EN-pin noise (not brownout).**
+  Reported 2026-09-01 as "sometimes boots twice"; first pass through this
+  item (below) treated it as an occasional double-reset, but a live capture
+  caught the real event and it's worse than that framing suggested.
+
+  Live evidence, captured while the board was idle and connected to this PC:
+  a burst of **~135 rapid resets in well under 20 seconds** (counted via
+  repetitions of the ROM's `entry 0x400805e4` boot line, corrupted/overlapping
+  in the raw capture because the resets were faster than one boot banner
+  could finish printing), then it recovered on its own — a follow-up 15s
+  capture immediately after showed zero further resets, fully stable.
+  `journalctl -k` showed no USB disconnect/reconnect around the event, so
+  the CP2102/USB link and the board's power stayed up throughout; this was
+  the ESP32 itself resetting, not a cable or power interruption. Every
+  *clean* (non-corrupted) reset-reason string captured — both during this
+  event's edges and in earlier isolated attempts — read `POWERON_RESET`,
+  never `RTCWDT_BROWN_OUT_RESET` and never a watchdog/software-reset code;
+  no panic or Guru Meditation output anywhere.
+
+  `POWERON_RESET` is specifically what the ROM reports for an EN-pin
+  transition. No power loss + a rapid burst of EN-triggered resets +
+  spontaneous recovery points at **EN-pin electrical noise**, not the
+  brownout hypothesis from the original pass: EN is deliberately just tied
+  to its onboard pull-up with no external decoupling capacitor (hardware
+  notes above), sitting on a breadboard-on-console rig — a high-impedance
+  net in exactly the kind of setup that's easy for a noise transient to
+  glitch. Not proven (no way to directly scope the EN pin from here), but
+  well-supported by everything observed so far.
+
+  **Next step, not yet done: add a small capacitor (100nF-1µF ceramic)
+  between EN and GND** — the standard fix for this exact symptom on ESP32
+  dev boards, and cheap/low-risk to try. If bursts continue afterward,
+  that would point back toward the brownout/power-supply hypothesis instead
+  (try a different power source/cable at that point). Diagnostic technique
+  for next time, if needed: `python3` + `pyserial` with `dtr=False,
+  rts=False` on open (a plain `cat`/`stty` open was found to hold the board
+  in reset the whole time it's open, producing a solid stream of null bytes
+  instead of real boot output); read `ser.in_waiting` immediately on open in
+  case a banner is already sitting in the kernel's buffer from a prior
+  event, then poll for a longer window to see if it's still active.
 
 ---
 
