@@ -60,6 +60,13 @@ pigtail to an Alfa APA-M25 8 dBi directional panel.
 
 Breadboard wiring diagram: `esp32_breadboard_wiring.pdf`.
 
+**Current physical build, as of 2026-09-03**: soldered to a generic
+perfboard/protoboard (same pinout/wiring as the diagram above) instead of a
+breadboard, purely so it can be transported and driven without wires
+shaking loose — not the custom PCB from Future ideas below, just an interim
+step for more field test time. Still on the temporary in-vehicle mount
+noted elsewhere in this file.
+
 ---
 
 ## Locked decisions
@@ -460,6 +467,30 @@ sub-decision before writing code.
     lower-trust handling — decision 7 no longer has a MEDIUM/HIGH scheme to
     slot this into (removed 2026-09-02), so this needs a fresh answer, not a
     reuse of the old one.
+
+- **Custom PCB + custom enclosure.** Raised 2026-09-03. Explicitly deferred —
+  not until the breadboard build has more bugs ironed out (phase timing,
+  reset-loop, field false-positive tuning are all still open above). Goal is
+  a purpose-built board that fits a custom enclosure, replacing the
+  breadboard-on-console rig. Already-locked constraint that carries over: the
+  EN-to-GND capacitor (see the reset-loop PCB note above). Possibly adding
+  extra physical buttons — currently everything (mute, band-mode cycle) is
+  overloaded onto the single BOOT-button tap/hold gesture (see the mute item
+  above); a PCB with dedicated buttons could split those back out, but that's
+  a layout/UX decision to make when this is actually picked up, not now.
+  Nothing else about the PCB is locked yet — schematic, footprint choices,
+  connector layout, button count/placement, and enclosure design all need
+  their own decisions before code or hardware work starts, per the rule at
+  the top of this file.
+
+  **Enclosure + mount, added 2026-09-03**: after the PCB, next is a 3D-printed
+  case sized to it, then a windshield mount. Leaning toward *not* designing a
+  custom mount — repurposing a generic radar-detector windshield mount (off
+  Amazon) instead, since that's a solved problem and there's no reason to
+  reinvent it. Not fully locked (no specific mount picked, and the 3D-printed
+  case's mounting interface needs to match whatever bracket that mount uses),
+  but it's the current direction — build the case to fit an off-the-shelf
+  mount rather than design one from scratch.
 
 ---
 
