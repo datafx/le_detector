@@ -11,10 +11,11 @@
 // linear-scanned as a fallback only after the main table's binary search
 // comes up empty, so add entries in whatever order is convenient.
 //
-// Confidence note: an unvetted self-added entry is capped at MEDIUM
-// (SPEC_BROAD) unless you explicitly set SPEC_LE_ONLY - same reasoning as
-// the main table's decision 7 (see CLAUDE.md): repetition alone shouldn't
-// earn HIGH confidence for something nobody's reviewed yet.
+// Specificity note: an unvetted self-added entry should default to
+// SPEC_BROAD unless you're confident the vendor is genuinely LE-only -
+// it's curation metadata (see oui_table.h), used to judge whether a vendor
+// is worth an EXCLUDE_VENDOR_* toggle later if it turns out to be a
+// false-positive source, not a runtime confidence tier.
 
 #include "oui_table.h"
 

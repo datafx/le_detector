@@ -3,12 +3,6 @@
 #include <Arduino.h>
 #include "oui_table.h"
 
-enum Confidence : uint8_t {
-    CONF_NONE = 0,
-    CONF_MEDIUM,   // OUI hit on a public address
-    CONF_HIGH      // OUI hit, public address, seen repeatedly
-};
-
 enum Source : uint8_t { SRC_BLE = 0, SRC_WIFI };
 
 struct TrackedDevice {
@@ -16,11 +10,8 @@ struct TrackedDevice {
     int16_t      rssi;        // EMA-smoothed
     uint32_t     firstSeen;
     uint32_t     lastSeen;
-    uint16_t     hits;
     const char*  vendor;
     GearCategory category;
-    Specificity  specificity;
-    Confidence   confidence;
     Source       source;
     bool         used;
 };
@@ -40,7 +31,6 @@ void detectorExpire();          // drop entries older than DEVICE_TTL_MS
 struct DetectorStatus {
     uint8_t              activeCount;   // matched devices currently in the table
     int16_t              bestRssi;      // strongest matched device
-    Confidence           bestConfidence;
     const TrackedDevice* best;          // nullptr when nothing is matched
     uint32_t             lastHitMs;     // millis() of the most recent match
 };

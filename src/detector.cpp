@@ -52,11 +52,6 @@ static void recordMatch(const uint8_t mac[6], int8_t rssi,
         d.rssi = (int16_t)((rssi * RSSI_EMA_NUM +
                             d.rssi * (RSSI_EMA_DEN - RSSI_EMA_NUM)) / RSSI_EMA_DEN);
         d.lastSeen = now;
-        if (d.hits < 0xFFFF) d.hits++;
-        // Broad-market vendors never reach HIGH: seeing a Motorola barcode
-        // scanner ten times doesn't make it a police radio.
-        d.confidence = (d.hits >= HIGH_CONF_HITS && oui->specificity == SPEC_LE_ONLY)
-                       ? CONF_HIGH : CONF_MEDIUM;
         return;
     }
 
@@ -74,16 +69,13 @@ static void recordMatch(const uint8_t mac[6], int8_t rssi,
 
     TrackedDevice& d = s_devices[slot];
     memcpy(d.mac, mac, 6);
-    d.rssi       = rssi;
-    d.firstSeen  = now;
-    d.lastSeen   = now;
-    d.hits       = 1;
-    d.vendor      = oui->vendor;
-    d.category    = oui->category;
-    d.specificity = oui->specificity;
-    d.confidence  = CONF_MEDIUM;
-    d.source     = src;
-    d.used       = true;
+    d.rssi      = rssi;
+    d.firstSeen = now;
+    d.lastSeen  = now;
+    d.vendor    = oui->vendor;
+    d.category  = oui->category;
+    d.source    = src;
+    d.used      = true;
 }
 
 void detectorExpire() {
@@ -98,18 +90,16 @@ void detectorExpire() {
 
 DetectorStatus detectorStatus() {
     DetectorStatus st = {};
-    st.bestRssi       = -127;
-    st.bestConfidence = CONF_NONE;
-    st.best           = nullptr;
-    st.lastHitMs      = s_lastHitMs;
+    st.bestRssi  = -127;
+    st.best      = nullptr;
+    st.lastHitMs = s_lastHitMs;
 
     for (uint8_t i = 0; i < MAX_TRACKED; i++) {
         if (!s_devices[i].used) continue;
         st.activeCount++;
         if (s_devices[i].rssi > st.bestRssi) {
-            st.bestRssi       = s_devices[i].rssi;
-            st.bestConfidence = s_devices[i].confidence;
-            st.best           = &s_devices[i];
+            st.bestRssi = s_devices[i].rssi;
+            st.best     = &s_devices[i];
         }
     }
     return st;

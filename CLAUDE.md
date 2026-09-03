@@ -90,11 +90,26 @@ Breadboard wiring diagram: `esp32_breadboard_wiring.pdf`.
    (nyanBOX uses `std::vector`). RSSI is EMA-smoothed 1/3 so one stray frame
    doesn't swing the flash rate.
 
-7. **Confidence**: OUI hit on a non-randomised address = MEDIUM. Seen
-   `HIGH_CONF_HITS` (3) times AND vendor is `SPEC_LE_ONLY` = HIGH.
-   `SPEC_BROAD` vendors (Motorola, Sierra Wireless, Harris, Hytera, CradlePoint,
-   Tait) are **capped at MEDIUM forever** — they sell huge volumes of civilian
-   gear, and repetition doesn't turn a barcode scanner into a police radio.
+7. **No confidence tiers — alert or no alert. Revised 2026-09-02.**
+   Originally: OUI hit on a non-randomised address = MEDIUM; seen
+   `HIGH_CONF_HITS` (3) times AND vendor is `SPEC_LE_ONLY` = HIGH;
+   `SPEC_BROAD` vendors capped at MEDIUM forever. Removed: raised while
+   discussing the CradlePoint false-positive problem — a low-confidence hit
+   either is real gear or it isn't, and the driver reacts to it either way,
+   so a MEDIUM/HIGH split wasn't buying anything operationally. It also
+   turned out to already be dead code: `bestConfidence` was computed in
+   `detector.cpp` but never read by `alert.cpp`, `ui.cpp`, or `main.cpp` —
+   no display, no behavior gating, ever. The project's actual answer to "this
+   vendor is unreliable" had already become binary per-vendor
+   include/exclude (see the `EXCLUDE_VENDOR_*` toggles below and the
+   CradlePoint default flip), which supersedes what the confidence tier was
+   trying to do. `Confidence` enum, `TrackedDevice.confidence`,
+   `TrackedDevice.hits` (only existed to feed `HIGH_CONF_HITS`), and
+   `DetectorStatus.bestConfidence` are gone. `Specificity`
+   (`SPEC_LE_ONLY`/`SPEC_BROAD`) **stays**, but is now compile-time curation
+   metadata only (see `oui_table.h`) — it informs which `SPEC_BROAD` vendors
+   are worth an exclude toggle if they turn out to be a false-positive
+   source, the way CradlePoint did; it no longer drives any runtime state.
 
 11. **Prefix lengths.** The table supports /24 (MA-L), /28 (MA-M) and /36
     (MA-S). Kustom Signals, Stalker, Federal Signal, Gamber-Johnson and Safety
@@ -369,12 +384,26 @@ file — do not implement any of these by silently picking a default.
   workflow. `ouiLookup()` in `oui_table.cpp` now falls back to
   `ouiUserLookup()` (linear scan, no sorting needed) whenever the main
   table's binary search comes up empty; `detector.cpp` and every other
-  caller are unchanged, they still just call `ouiLookup()`. Confidence for
-  staged entries is capped at MEDIUM (`SPEC_BROAD`-style) unless the user
-  explicitly sets `SPEC_LE_ONLY` — same reasoning as decision 7. Verified:
-  uncommenting the example row makes `ouiLookup()` find it via the fallback
-  path; existing `test/test_oui.cpp` suite still passes unchanged (the
-  staging table is empty by default, so it never intercepts anything).
+  caller are unchanged, they still just call `ouiLookup()`. Staged entries
+  should default to `SPEC_BROAD` unless the user is confident the vendor is
+  genuinely LE-only — curation metadata now, not a confidence tier, per the
+  revised decision 7. Verified: uncommenting the example row makes
+  `ouiLookup()` find it via the fallback path; existing `test/test_oui.cpp`
+  suite still passes unchanged (the staging table is empty by default, so
+  it never intercepts anything).
+
+- **Comment-out-to-disable documented directly in `oui_table.cpp`.
+  Implemented 2026-09-02.** Raised alongside the confidence-tier removal —
+  wanted an easy way to enable/disable individual OUIs pre-compile "without
+  doing anything crazy." Turned out this already worked: commenting out any
+  single row in the main table cannot break the sort order or the binary
+  search (removing an element leaves the rest sorted), so no new toggle
+  machinery was needed — the gap was purely that it wasn't documented. Added
+  a block comment above `OUI_TABLE` in `oui_table.cpp` saying so explicitly,
+  and pointed the README at the same thing. The `EXCLUDE_VENDOR_*` macros
+  remain for a different purpose — flipping a vendor off *by default* for
+  everyone who builds the project (like the CradlePoint change above) — not
+  a replacement for hand-commenting a row you personally don't want.
 
 ---
 
@@ -416,8 +445,10 @@ sub-decision before writing code.
   - **Still open, not yet locked**: (1) where the match runs — inline in the
     `IRAM_ATTR` WiFi promiscuous callback (cheap, but that callback has an
     explicit "keep it short" rule in Gotchas) vs. deferred to the main loop;
-    (2) how an SSID hit feeds the confidence model — same MEDIUM/HIGH scheme
-    as decision 7, or a separate/lower-trust signal track.
+    (2) whether an SSID hit alerts the same as an OUI hit or needs its own,
+    lower-trust handling — decision 7 no longer has a MEDIUM/HIGH scheme to
+    slot this into (removed 2026-09-02), so this needs a fresh answer, not a
+    reuse of the old one.
 
 ---
 

@@ -50,6 +50,17 @@ extern const OuiEntry* ouiUserLookup(const uint8_t mac[6]);
 //
 // MUST STAY SORTED ascending by prefix bytes - lookup is a binary search.
 // Table body is generated sorted; re-run test/test_oui.cpp after any edit.
+//
+// DON'T WANT A SPECIFIC OUI? Just comment out its row below with `//`.
+// Deleting a row can't break the sort order or the binary search - the
+// remaining rows are still sorted, there are just fewer of them. No macro,
+// no rebuild flag, nothing else to touch. (The EXCLUDE_VENDOR_* toggles
+// below are for the opposite direction: flipping a whole vendor off by
+// default for everyone who builds this, without deleting it from the
+// source.) Adding a new OUI here means finding its correct sorted spot by
+// hand; if you'd rather not deal with that, add it to
+// `user_oui_table.cpp` instead - that table is unsorted and appended to,
+// exactly for this.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------

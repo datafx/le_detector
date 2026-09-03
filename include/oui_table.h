@@ -19,9 +19,12 @@ enum GearCategory : uint8_t {
 // SPEC_LE_ONLY - effectively sells nowhere else; a hit means something on its own.
 // SPEC_BROAD   - real LE supplier, but the same prefix appears on huge volumes of
 //                civilian gear (warehouse scanners, IoT modems, utility radios).
-//                Capped at MEDIUM confidence no matter how often it is seen:
-//                repetition doesn't turn a Motorola barcode scanner into a
-//                police radio.
+//
+// Curation metadata only - there is no runtime confidence tier anymore (every
+// watchlist match alerts the same way). This column exists to help a maintainer
+// judge which SPEC_BROAD vendors are worth an EXCLUDE_VENDOR_* toggle (see
+// oui_table.cpp) if they turn out to be a false-positive source, the way
+// CradlePoint did.
 enum Specificity : uint8_t {
     SPEC_BROAD = 0,
     SPEC_LE_ONLY

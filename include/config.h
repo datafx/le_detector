@@ -55,9 +55,6 @@ static const uint32_t DEVICE_TTL_MS     = 10000; // drop entry if unseen this lo
 static const uint8_t  RSSI_EMA_NUM      = 1;     // EMA smoothing: new weight
 static const uint8_t  RSSI_EMA_DEN      = 3;     //   value = (new*1 + old*2)/3
 
-// A device must be seen this many times before it can reach HIGH confidence.
-static const uint8_t  HIGH_CONF_HITS    = 3;
-
 // ---------------------------------------------------------------------------
 // Alert behaviour
 //

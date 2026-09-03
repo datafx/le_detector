@@ -21,19 +21,29 @@ Power via micro-USB. EN is left unwired.
 
 ## Watchlist
 
-65 IEEE-registered prefixes across 40+ law-enforcement equipment vendors, split
-by how exclusively they sell to LE. **LE-only** vendors can reach HIGH
-confidence; **broad** vendors (real LE suppliers whose prefixes also ship on
-large volumes of civilian gear) are capped at MEDIUM no matter how often seen.
+65 IEEE-registered prefixes across 40+ law-enforcement equipment vendors (63
+compiled in by default — see below). Any match on the list alerts the same
+way — there's no confidence tier, since a weak signal still needs a reaction.
+Each entry is tagged by how exclusively its vendor sells to LE (**LE-only**
+vs **broad**, meaning it also ships on large volumes of civilian gear) purely
+as curation info: broad vendors that turn out to be a false-positive source
+get compiled out entirely (see the `EXCLUDE_VENDOR_*` toggles in
+`oui_table.cpp` — CradlePoint is off by default for exactly this reason)
+rather than downgraded.
 
 Supports /24 (MA-L), /28 (MA-M) and /36 (MA-S) assignments. Prefixes shown with
 a trailing `N_` are sub-/24 blocks where only the high nibble of the next byte is
 significant. Keep the array sorted ascending; lookup is a binary search. Run
 `test/test_oui.cpp` after edits.
 
+Don't want a specific entry? Just comment out its row in `oui_table.cpp` —
+removing a row can't break the sort order, so no rebuild flag or macro is
+needed. Want to add one locally before submitting it upstream? Drop it in
+`user_oui_table.cpp` instead, which is unsorted and just appended to.
+
 ### Complete list
 
-| Prefix | Vendor | Category | Tier |
+| Prefix | Vendor | Category | Specificity |
 |---|---|---|---|
 | `00:00:C3` | Harris | Radio | broad |
 | `00:04:7D` | Motorola Sol | Radio | broad |
