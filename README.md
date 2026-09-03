@@ -19,6 +19,30 @@ signals hits on an LED and buzzer, flashing faster as the signal strengthens.
 
 Power via micro-USB. EN is left unwired.
 
+## Parts list
+
+| Part | Notes |
+|---|---|
+| ESP32-WROOM-32U DevKitC (38-pin) | The `-U` variant — external antenna via U.FL, not the PCB-antenna `-D` variant |
+| SSD1306 128x64 OLED, I2C | Any standard 4-pin (GND/VCC/SCL/SDA) module |
+| LED, any color | + 270R resistor, GPIO25 to GND |
+| Active buzzer module, 3.3–5V | Must be an *active* module (built-in oscillator, just needs a logic level), not passive/piezo. Check `BUZZER_ACTIVE_LOW` in `config.h` against your specific module — some trigger on LOW (see Gotchas below) |
+| U.FL → RP-SMA pigtail | Connects the WROOM-32U's onboard U.FL to an external antenna |
+| Alfa APA-M25 (8 dBi directional panel) or equivalent 2.4 GHz antenna | RP-SMA connector |
+| Breadboard + jumper wires | Or a PCB — see the EN-pin note below if you're laying one out |
+| Micro-USB cable | Power + programming; no external supply needed |
+
+No 5V rail needed anywhere — the buzzer runs off the same 3V3 the DevKitC
+outputs on J2 pin 1, and everything else is 3.3V logic.
+
+**Building a PCB instead of breadboarding?** Add a 100nF–1µF ceramic
+capacitor between EN and GND. The reference build runs EN bare (just its
+onboard pull-up) and hit a burst of spurious resets that pointed at EN-pin
+noise on the breadboard's high-impedance wiring — see the reset-loop note in
+`CLAUDE.md` for the full writeup. The cap is cheap, standard practice on
+ESP32 designs, and worth including on a PCB layout regardless of whether
+that was the actual cause on the breadboard.
+
 ## Watchlist
 
 65 IEEE-registered prefixes across 40+ law-enforcement equipment vendors (63

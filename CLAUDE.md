@@ -202,6 +202,17 @@ Breadboard wiring diagram: `esp32_breadboard_wiring.pdf`.
   case a banner is already sitting in the kernel's buffer from a prior
   event, then poll for a longer window to see if it's still active.
 
+  **PCB note, added 2026-09-02**: whenever this moves from breadboard to an
+  actual PCB, include the EN-to-GND capacitor (100nF-1µF ceramic) on the
+  board regardless of whether the breadboard EN-noise theory above ever
+  gets confirmed — it's the standard practice on ESP32 designs, cheap, and
+  harmless even if EN noise turns out not to have been the actual cause of
+  the reset bursts (a one-off USB-adjacent host issue, unrelated to this
+  board, was later found responsible for a separate flashing problem seen
+  the same day — that doesn't rule out EN noise as the reset-burst cause,
+  it's just not confirmation either way). Not a decision that needs to wait
+  on root-causing the breadboard symptom.
+
 ---
 
 ## Next iteration — planned changes (not yet designed)
