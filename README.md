@@ -174,10 +174,15 @@ when it fires on a beacon: a CradlePoint OUI just means "some CradlePoint
 router," a matched `IBR900-`/`IBR1700-` SSID says which model.
 
 Each entry picks a match mode — **prefix** (`IBR900-` matches
-`IBR900-1A2B3C`) or **substring** (matches anywhere in the SSID) — and
-matching is case-insensitive. No IEEE-registry equivalent exists for
-SSIDs; every real row should come from an actual field capture (WiGLE
-surveys, on-site logging), not a guess.
+`IBR900-1A2B3C`), **substring** (matches anywhere in the SSID), or
+**prefix+substring** (a prefix *and* a second required substring
+somewhere after it, e.g. pattern `IBR` + required substring `-mobile`
+matches `IBR900-fleet-mobile12` but not `IBR900-fleet` alone — the
+two-fragment-with-a-gap shape a glob would write as `IBR*-mobile`) — and
+matching is case-insensitive. There's no literal wildcard character or
+regex engine, just these three fixed shapes. No IEEE-registry equivalent
+exists for SSIDs; every real row should come from an actual field
+capture (WiGLE surveys, on-site logging), not a guess.
 
 A probe-request hit is weaker evidence than a beacon/probe-response hit —
 a client leaking a network it previously joined isn't proof that network's
