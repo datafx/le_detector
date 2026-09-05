@@ -1,7 +1,8 @@
 # LE Gear Detector — ESP32-WROOM-32U
 
 Passive BLE + WiFi scanner. Watches for MAC OUIs on a vendor watchlist and
-signals hits on an LED and buzzer, flashing faster as the signal strengthens.
+SSIDs on a second watchlist (beacons, probe requests, probe responses),
+signaling hits on an LED and buzzer, flashing faster as the signal strengthens.
 
 ## Build
 
@@ -161,6 +162,37 @@ Whelen, Code 3, SoundOff Signal, MPH Industries, Getac, and COBAN Technologies
 (Houston) have no IEEE assignments — most lightbars and many radar heads aren't
 IP devices at all, so there's nothing to match on.
 
+## SSID watchlist
+
+Independent signal from the OUI table, matched against beacon, probe
+request, and probe response frames. A client configured for a hidden
+network sends its target SSID in cleartext in a directed probe request —
+an 802.11 protocol requirement, not a configuration choice — so this
+survives MAC address randomisation, a hard limit on OUI matching (see
+Known limits below). It's also strictly better evidence than a bare OUI hit
+when it fires on a beacon: a CradlePoint OUI just means "some CradlePoint
+router," a matched `IBR900-`/`IBR1700-` SSID says which model.
+
+Each entry picks a match mode — **prefix** (`IBR900-` matches
+`IBR900-1A2B3C`) or **substring** (matches anywhere in the SSID) — and
+matching is case-insensitive. No IEEE-registry equivalent exists for
+SSIDs; every real row should come from an actual field capture (WiGLE
+surveys, on-site logging), not a guess.
+
+A probe-request hit is weaker evidence than a beacon/probe-response hit —
+a client leaking a network it previously joined isn't proof that network's
+AP is nearby now — so the two are tagged differently on the display
+(`SSID probe: <name>` vs `SSID beacon: <name>`), though both alert the
+same way.
+
+Ships with one live row, `LEDET-TEST`, which is test/demo data, not a real
+vendor signature — labeled as such in the source, in this doc, and in the
+vendor string itself, so it's unmistakable if it ever fires on the OLED.
+Spoof it by renaming a phone hotspot or a saved WiFi profile to
+`LEDET-TEST` to exercise the whole detection/display/alert path without
+needing real LE gear nearby. Comment it out in `ssid_table.cpp` before
+relying on this table for anything real; real entries follow the same
+"comment out a row to disable" convention as the OUI table.
 
 ## Known limits
 
@@ -169,6 +201,14 @@ IP devices at all, so there's nothing to match on.
 - **MAC randomisation.** Only public BLE addresses and non-randomised WiFi MACs
   carry a real OUI. Randomised addresses are skipped — their vendor bits are
   meaningless. This limits how much is detectable regardless of watchlist size.
+  SSID matching runs independently of this and is unaffected.
+- **SSID matching depends on what's actually broadcast.** A wildcard probe
+  request or a hidden-SSID beacon carries no SSID bytes at all — nothing to
+  match either way. Directed probe requests specifically are a declining
+  signal: modern phone OSes (iOS/Android, roughly 2014-2017 onward) mostly
+  suppress them (randomised MAC + wildcard probes only), so this
+  increasingly only catches older/embedded clients, not phones.
+  Beacon/probe-response SSID matching is unaffected by that trend.
 - Repeated WiFi/BLE stack init+deinit every few seconds is necessary given the
   single shared radio, but watch for heap fragmentation on long runs.
 
