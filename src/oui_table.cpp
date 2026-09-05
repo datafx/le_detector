@@ -31,11 +31,19 @@ extern const OuiEntry* ouiUserLookup(const uint8_t mac[6]);
 // DELIBERATELY EXCLUDED - name collisions that would cause false alerts:
 //   00:01:21, 00:90:7F  WatchGuard Technologies (Seattle) = FIREWALLS, not
 //                       WatchGuard Video of Plano TX.
-//   24:A3:F0:7x etc     Coban SRL (Italy) is NOT COBAN Technologies (Houston,
-//                       police in-car video). The Houston firm has no IEEE
+//   24:A3:F0:7x,        Coban SRL (Italy) is NOT COBAN Technologies (Houston,
+//   00:1B:C5:0B:4x      police in-car video). The Houston firm has no IEEE
 //                       assignment at all.
 //   8C:1F:64:A7:8x      TAIT Global LLC (Lititz PA) is not Tait Electronics
 //                       (Christchurch NZ), the radio maker.
+//   00:58:28, 00:C0:D4, Axon Networks Inc. - a defunct 1990s networking
+//   84:70:03            vendor - is not Axon Enterprise (00:25:DF above).
+//   D4:63:52            Vutility Inc. (energy metering) is not Utility, Inc.
+//                       (BodyWorn) at 00:09:BC/00:16:ED above.
+//
+// Cross-checked 2026-09-04 against JakeSwiz/end-0f-watch's police_ouis.json
+// (github.com/JakeSwiz/end-0f-watch), which documents these same four
+// collisions plus the ones we already had recorded.
 //
 // DELIBERATELY EXCLUDED - too broad to carry any signal:
 //   Dell, Panasonic  - Toughbook/laptop MDTs are ubiquitous patrol gear, but
@@ -180,6 +188,7 @@ static const OuiEntry OUI_TABLE[] = {
   { { 0xD4,0x13,0xF8,0x00,0x00 }, 24, "Peplink",          CAT_VEHICLE,   SPEC_BROAD      },
   { { 0xE0,0xDA,0xDC,0x00,0x00 }, 24, "JVC Kenwood",      CAT_RADIO,     SPEC_BROAD      },
   { { 0xE4,0x1E,0x0A,0xB0,0x00 }, 28, "Safety Vision",    CAT_BODYCAM,   SPEC_BROAD      },
+  { { 0xF4,0x69,0xD5,0x70,0x00 }, 28, "Rosco Vision",     CAT_BODYCAM,   SPEC_BROAD      },
   { { 0xFC,0x01,0x9E,0x00,0x00 }, 24, "VieVu",            CAT_BODYCAM,   SPEC_LE_ONLY    },
 };
 

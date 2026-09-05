@@ -156,13 +156,38 @@ noted elsewhere in this file.
 
 ## Open decisions
 
-- **Watchlist coverage.** 65 entries across 40+ vendors (18 LE-only, 29 broad),
+- **Watchlist coverage.** 66 entries across 40+ vendors (18 LE-only, 30 broad),
   all IEEE registry assignments, address-verified. Still absent from the IEEE
   data entirely: Whelen, Code 3, SoundOff Signal, MPH Industries, EF Johnson,
   BK Technologies, Getac, COBAN Technologies (Houston) — most lightbars and
   many radar heads aren't IP devices at all. 20 entries were cross-confirmed
   against nyanBOX's own (XOR-obfuscated) firmware list; see
   tools/decrypt_nyan_ouis.py and the README Provenance section.
+
+  **Cross-checked 2026-09-04 against JakeSwiz/end-0f-watch's
+  `police_ouis.json`** (github.com/JakeSwiz/end-0f-watch). Their list skews
+  Axon/Motorola/bodycam-heavy and doesn't cover radar, ALPR, or vehicle-mount
+  categories at all, so most of the diff was already-known territory. Two
+  things came out of it and were applied directly (table stays sorted, no
+  reordering needed either way):
+  - **Added Rosco Vision Systems**, `F4:69:D5:70` (MA-M /28), `CAT_BODYCAM`,
+    `SPEC_BROAD`. Verified against the live IEEE-backed vendor registry
+    (checked the block boundary too — `F4:69:D5:6F` resolves to a different
+    registrant, `F4:69:D5:70`–`7F` to Rosco), not taken from their JSON on
+    faith. Filed `SPEC_BROAD` rather than `SPEC_LE_ONLY`: Rosco's actual
+    product line is vehicle camera/mirror systems sold broadly across buses,
+    trucks, and fleets, not an LE-exclusive vendor — same reasoning that
+    already applies to Safety Vision, and the same class of risk the
+    CradlePoint school-bus false positives came from.
+  - **Documented two more name-collision exclusions** in `oui_table.cpp`
+    that we'd correctly never included but hadn't written down: Axon
+    Networks Inc. (`00:58:28`, `00:C0:D4`, `84:70:03` — a defunct 1990s
+    networking vendor, not Axon Enterprise) and Vutility Inc. (`D4:63:52`,
+    energy metering, not Utility Inc./BodyWorn). Also added the second COBAN
+    SRL block (`00:1B:C5:0B:4x`) alongside the one we already had
+    (`24:A3:F0:7x`). Their Panasonic inclusion was left out on purpose — we
+    already exclude Panasonic per decision 13 and see no reason to reverse
+    that.
 
 - **Phase timing under real driving conditions.** 3.5 s WiFi + 3 s BLE plus
   ~200–400 ms of stack transitions means a ~7 s revisit interval. At 65 mph
