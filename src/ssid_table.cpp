@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "ssid_table.h"
+#include <string.h>   // strlen, for SSID_MATCH_PREFIX_AND_CONTAINS
 
 // ---------------------------------------------------------------------------
 // SSID WATCHLIST
@@ -25,6 +26,12 @@
 // allows - a short/generic pattern (e.g. bare "MDT") risks matching consumer
 // SSIDs the same way an overly broad OUI does.
 //
+// Three match modes (see SsidMatchMode in ssid_table.h): PREFIX, CONTAINS,
+// and PREFIX_AND_CONTAINS - the last requires `pattern` at the start of the
+// SSID AND `contains` somewhere in what's left after that prefix, the
+// two-fragment-with-a-gap shape a glob would write as "IBR*-mobile". Still
+// no literal wildcard character or regex engine - just a third fixed shape.
+//
 // *** THIS TABLE CURRENTLY SHIPS WITH ONE LIVE ROW THAT IS TEST/DEMO DATA,
 // *** NOT A REAL VENDOR SIGNATURE - see the row itself below. Everything
 // *** else in this file is the real, empty-by-default watchlist design.
@@ -38,12 +45,18 @@ static const SsidEntry SSID_TABLE[] = {
     // what would render on the OLED if this fires, so "TEST/DEMO" needs to
     // be unmistakable there too, not just in this comment. Remove this row
     // before relying on this table for anything but a demo/bring-up.
-    { "LEDET-TEST", SSID_MATCH_PREFIX, "TEST/DEMO SSID - not real gear", CAT_OTHER },
+    { "LEDET-TEST", SSID_MATCH_PREFIX, "TEST/DEMO SSID - not real gear", CAT_OTHER, nullptr },
 
     // Example rows showing the field layout - uncomment and edit with a
-    // pattern actually seen in the field:
-    // { "IBR900-",  SSID_MATCH_PREFIX,   "CradlePoint IBR900",  CAT_VEHICLE },
-    // { "IBR1700-", SSID_MATCH_PREFIX,   "CradlePoint IBR1700", CAT_VEHICLE },
+    // pattern actually seen in the field. The fifth field is only meaningful
+    // for SSID_MATCH_PREFIX_AND_CONTAINS (see ssid_table.h) - pass nullptr
+    // for the other two modes:
+    // { "IBR900-",  SSID_MATCH_PREFIX,   "CradlePoint IBR900",  CAT_VEHICLE, nullptr },
+    // { "IBR1700-", SSID_MATCH_PREFIX,   "CradlePoint IBR1700", CAT_VEHICLE, nullptr },
+    // Two-fragment example: starts with "IBR", and "-mobile" appears
+    // somewhere after that prefix - the shape a glob would write as
+    // "IBR*-mobile":
+    // { "IBR", SSID_MATCH_PREFIX_AND_CONTAINS, "CradlePoint IBR (mobile)", CAT_VEHICLE, "-mobile" },
 };
 
 static const uint16_t SSID_TABLE_SIZE =
@@ -78,8 +91,22 @@ const SsidEntry* ssidLookup(const char* ssid) {
 
     for (uint16_t i = 0; i < SSID_TABLE_SIZE; i++) {
         const SsidEntry& e = SSID_TABLE[i];
-        bool hit = (e.mode == SSID_MATCH_PREFIX) ? ciMatchAt(ssid, e.pattern)
-                                                  : ciContains(ssid, e.pattern);
+        bool hit;
+        switch (e.mode) {
+        case SSID_MATCH_PREFIX:
+            hit = ciMatchAt(ssid, e.pattern);
+            break;
+        case SSID_MATCH_CONTAINS:
+            hit = ciContains(ssid, e.pattern);
+            break;
+        case SSID_MATCH_PREFIX_AND_CONTAINS:
+        default:
+            // `contains` is searched only in what's left after `pattern` -
+            // it can't be satisfied by bytes inside the prefix itself.
+            hit = e.contains && ciMatchAt(ssid, e.pattern) &&
+                  ciContains(ssid + strlen(e.pattern), e.contains);
+            break;
+        }
         if (hit) return &e;
     }
     return nullptr;
