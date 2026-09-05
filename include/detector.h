@@ -3,7 +3,12 @@
 #include <Arduino.h>
 #include "oui_table.h"
 
-enum Source : uint8_t { SRC_BLE = 0, SRC_WIFI };
+// SRC_PROBE is its own value (not lumped into SRC_WIFI) because a probe
+// request SSID is weaker evidence than a beacon/probe-response SSID or an
+// OUI hit: it's a client leaking a network it previously joined, not proof
+// that network's AP is nearby now. Beacon/probe-response SSID matches stay
+// tagged SRC_WIFI - same evidentiary weight as an OUI hit on those frames.
+enum Source : uint8_t { SRC_BLE = 0, SRC_WIFI, SRC_PROBE };
 
 struct TrackedDevice {
     uint8_t      mac[6];
@@ -13,6 +18,7 @@ struct TrackedDevice {
     const char*  vendor;
     GearCategory category;
     Source       source;
+    char         ssid[33];    // NUL-terminated; empty when match wasn't SSID-based
     bool         used;
 };
 

@@ -245,6 +245,76 @@ noted elsewhere in this file.
   it's just not confirmation either way). Not a decision that needs to wait
   on root-causing the breadboard symptom.
 
+- **BLE company-ID / service-UUID matching as a second signature axis,
+  alongside OUI. Raised 2026-09-04**, after surveying comparable projects
+  (see the README/memory for the list — notably `colonelpanichacks/oui-spy`,
+  which matches BLE company ID + 16-bit service UUID in addition to OUI, and
+  `soyboi1312/all-cameras-are-beacons`, which pairs Axon's `00:25:DF` OUI
+  with a `BWCDEVICE` service-data tag specifically because "Axon is moving
+  to rotating BLE MACs, so a MAC-based match alone would not hold"). Not
+  locked, not designed — research only so far.
+
+  **Mechanism, confirmed against the actual ESP-IDF headers this build
+  uses**: `esp_gap_ble_api.h`'s `ble_scan_result_evt_param.ble_adv` already
+  carries the full advertisement payload (up to 31 bytes adv + 31 bytes
+  scan-response) on every scan callback; `processBleResult()` in
+  `detector.cpp` currently reads only `bda` and `rssi` from it. ESP-IDF
+  ships `esp_ble_resolve_adv_data(adv_data, type, &length)` to pull out
+  manufacturer-specific data (type `0xFF`, first 2 bytes = company ID),
+  16-bit service UUIDs (`0x02`/`0x03`), or service data (`0x16`, the kind of
+  tag `BWCDEVICE` is) without writing a custom TLV parser.
+
+  **Performance/scan-time overhead: confirmed negligible.** Passive BLE
+  scanning already receives and buffers the full advertisement for every
+  packet; parsing more of a payload already paid for doesn't touch
+  `WIFI_PHASE_MS`/`BLE_PHASE_MS` (decision 2), the revisit interval, or WiFi
+  channel hop (BLE-only feature, no WiFi interaction). Added CPU cost is a
+  bounded scan of ≤31 bytes per advert in the Bluedroid host task context
+  (not the `IRAM_ATTR` WiFi callback with the "keep it short" rule — doesn't
+  apply here). Not the blocker if this goes forward.
+
+  **What's actually blocking this, in order of weight:**
+
+  1. **Collides with locked decision 4.** The entire point of
+     company-ID/service-UUID matching, per both examples above, is to catch
+     devices that have moved to randomized addresses — decision 4 currently
+     rejects any non-`BLE_ADDR_TYPE_PUBLIC` address before OUI lookup ever
+     runs. Gating the new signature the same way throws away most of the
+     benefit (a public-address device's OUI already identifies the vendor).
+     Getting the real value means letting this one check bypass the
+     address-type gate — a deliberate carve-out of a decision the file
+     calls a "hard ceiling... not a bug to fix," which needs its own
+     explicit lock, not an implied side effect of adding the feature.
+  2. **Single-field signatures are likely too noisy on their own.**
+     Company IDs identify the BLE chipset/SDK vendor (Nordic, TI, Espressif
+     etc.), not the end product — same `SPEC_BROAD` risk as CradlePoint's
+     OUI, but worse, since it's one step further removed from "who made
+     this device." oui-spy's own writeup calls CID-only or
+     service-UUID-only auto-installers "false-positive magnets" and only
+     ships AND-composite matching (company ID + service UUID together) for
+     that reason. Whether this project's version needs composite matching,
+     and what the match-logic shape looks like, is a real design decision.
+  3. **Passive-scan-only (decision 3) creates a hard visibility ceiling.**
+     Scan-response data (`scan_rsp_len`) is only ever populated when a scan
+     *request* was sent, which this project's passive scanning never does.
+     If a vendor's manufacturer data or service-data tag lives in the scan
+     response rather than the primary `ADV_IND`, no amount of parsing code
+     here will ever see it — that's not knowable from a registry, it needs
+     an actual capture (nRF Connect / Wireshark) from a real unit per
+     vendor before assuming the signature is reachable at all under this
+     project's scanning mode.
+  4. **No IEEE-equivalent sourcing path.** The OUI table's curation
+     standard (address-verified against the live registry) has no
+     equivalent here — the Bluetooth SIG company ID list gives a vendor
+     name, not what UUID or service-data tag a specific product actually
+     broadcasts. Each entry would need a real capture or a trusted
+     documented one, slower per-vendor than an IEEE block lookup.
+
+  Net: implementation cost and runtime cost both look small; the real cost
+  is in decisions (#1 and #2 above) and per-vendor field verification (#3
+  and #4), not code or scan timing. Nothing here is locked — do not start
+  implementing this by picking defaults for any of the four points above.
+
 ---
 
 ## Next iteration — planned changes (not yet designed)
@@ -448,6 +518,131 @@ file — do not implement any of these by silently picking a default.
   everyone who builds the project (like the CradlePoint change above) — not
   a replacement for hand-commenting a row you personally don't want.
 
+- **SSID extraction and matching for probe requests, beacons, and probe
+  responses. Implemented 2026-09-05.** Moved up from "Future ideas" below
+  and built directly, on the strength of field data: OUI matching alone
+  proved insufficient — CradlePoint alerted on school buses and turnpike
+  PTZ cameras but missed PSP entirely, and a WiGLE survey of Schuylkill
+  County found numerous fleet routers running hidden SSIDs. A client
+  configured for a hidden network must send directed probe requests
+  containing that SSID in cleartext — an 802.11 protocol requirement, not a
+  configuration choice — and it survives MAC randomization, which is exactly
+  the class of frame `wifiSnifferCb` was previously discarding after using
+  it only for the (randomization-defeated) OUI check.
+
+  **Mechanism**: `extractSsid()` in `detector.cpp` reads the SSID
+  information element (element ID `0x00`) directly at its fixed offset —
+  24 bytes in for probe requests (no fixed fields before the IEs), 36 for
+  beacons/probe responses (12 bytes of timestamp/interval/capability info
+  first) — rather than walking a general IE list, since SSID is always the
+  first IE for these frame types. Every offset is checked against
+  `rx_ctrl.sig_len` before it's read; the IE's own length byte is never
+  trusted on its own. A zero-length SSID (wildcard probe, or a legitimately
+  hidden-SSID beacon) is skipped — nothing to match either way. Matching
+  runs inline in the `IRAM_ATTR` callback, allocation-free, bounded to a
+  32-byte copy — resolves open sub-decision (1) from the Future-ideas entry
+  below: yes, inline, not deferred to the main loop.
+
+  **OUI matching and SSID matching are now independent gates** on the same
+  frame. The locally-administered-bit check (decision 4) still gates OUI
+  lookup only; SSID extraction and matching run unconditionally, since the
+  entire point is to catch what a randomized address hides.
+
+  **New watchlist**: `include/ssid_table.h` / `src/ssid_table.cpp`, a small
+  linear-scanned table parallel to (not merged into) `oui_table.cpp` — kept
+  separate because it has a different match algorithm (substring/prefix
+  vs. the OUI table's sorted/masked binary search) and a different
+  invariant (none — commenting out a row here was already safe for the OUI
+  table's binary search, and is trivially safe here too, but mixing the two
+  tables risked implying the SSID one also needs to stay sorted, which it
+  doesn't). Ships empty, same convention as `user_oui_table.cpp`, with
+  commented example rows for `IBR900-`/`IBR1700-` — the CradlePoint default
+  SSID prefixes the WiGLE survey showed in local use, and a much more
+  specific signal than the bare CradlePoint OUI (which is what's actually
+  producing the school-bus/turnpike-camera false positives above). No IEEE-
+  registry equivalent exists for SSIDs — every row should come from an
+  actual field capture, not a guess.
+
+  **Revises the match-semantics and case-sensitivity locks from the
+  Future-ideas entry below.** Those called for prefix-only matching (plain
+  `strncmp`, trailing wildcard) and case-sensitive exact-byte comparison.
+  Implemented instead: each table row picks `SSID_MATCH_PREFIX` or
+  `SSID_MATCH_CONTAINS` (still no regex/glob engine, no dynamic allocation —
+  just two comparison primitives instead of one), and all matching is
+  case-insensitive (ASCII only). Superseded because the concrete field data
+  driving this — hidden-network fleet routers, agency-specific naming — did
+  not fit a prefix-only, case-sensitive model as cleanly as expected; this
+  is a direct instruction from the 2026-09-05 session, not a default picked
+  silently.
+
+  **Resolves open sub-decision (2)** from the Future-ideas entry below: an
+  SSID hit feeds the same `recordMatch`/alert path as an OUI hit — no
+  separate confidence tier, consistent with decision 7's binary alert
+  model. The distinction is visual, not behavioral: beacon/probe-response
+  SSID hits are tagged `SRC_WIFI` (the AP itself is transmitting — same
+  evidentiary weight as an OUI hit on those frame types), while probe-
+  request SSID hits get a new `SRC_PROBE` source, since a probe request is
+  a client leaking a *previously joined* network, not proof that network's
+  AP is present now (see the Future-ideas discussion of this distinction).
+
+  **`TrackedDevice` gained a fixed `char ssid[33]`** (32 bytes + NUL, no
+  dynamic allocation, matches the existing fixed-table design), populated
+  only for SSID-based matches and empty otherwise.
+
+  **Wired into `uiRender()`, added 2026-09-05.** `ui.cpp` gained a second
+  text line beneath the vendor name: the matched SSID when `.ssid` is set
+  (prefixed `SSID probe:` or `SSID beacon:` per `.source`, since the two
+  aren't equally trustworthy — see below), else a plain `via BLE` / `via
+  WiFi OUI` tag so an OUI hit still shows which radio it came from. The
+  vendor-name band shrank from 36px to 26px to make room; the RSSI bar's
+  position is unchanged. `category` remains unshown — its gap is
+  independent of this and wasn't part of this ask.
+
+  **SSID watchlist size surfaced in two places, added 2026-09-05** (missed
+  on the first pass — only the boot screen got it initially): the boot
+  screen's existing `OUI entries: %u` line (`uiBootScreen()`) now has an
+  `SSID entries: %u` line right under it, and the idle "No matched gear"
+  screen's existing `Watchlist: %u OUI` line (`uiRender()`) now has a
+  `%u SSID pattern(s)` line under it too — same "so you can tell at a
+  glance whether you flashed the table you meant to" reasoning as the OUI
+  count, applied to both screens it already appeared on, not just one.
+
+  **Alerting required no changes at all.** `alertUpdate()` in `alert.cpp`
+  keys only on `DetectorStatus.lastHitMs`/`.bestRssi`, both of which come
+  from `detectorStatus()` iterating every entry in the shared device table
+  regardless of source — and SSID/probe hits already go through the same
+  `recordMatch()` as OUI hits. So an SSID match was already driving the
+  LED/buzzer before this display work; the phase machine and alert engine
+  are still untouched, per the original scope for this feature.
+
+  **Verification note**: build and flash both succeeded, the off-target
+  logic checks all pass, and the whole path was confirmed end to end on the
+  actual device 2026-09-05 by spoofing a NetworkManager AP with a cloned
+  Axon-OUI MAC (`00:25:DF`) on this dev machine — vendor name, RSSI, and the
+  alert all fired correctly for a WiFi-OUI hit; the SSID path was exercised
+  the same way via the `LEDET-TEST` row.
+
+  **`SSID_TABLE` deliberately ships with one live row, not empty**, per an
+  explicit call after the confirmation above: `src/ssid_table.cpp`'s
+  `LEDET-TEST` row (see bring-up step 5) is committed and active on `main`,
+  labeled in three places as test/demo data, not a real vendor signature —
+  a loud comment block directly above `SSID_TABLE`, a comment on the row
+  itself, and the row's own `vendor` string (`"TEST/DEMO SSID - not real
+  gear"`), since that string is exactly what would render on the OLED if it
+  fires. This is a deliberate exception to "ships empty" for the sake of
+  having an always-available demo/bring-up signature on a fresh checkout;
+  it is not a real watchlist entry and should not be mistaken for one.
+  Decision 10 (no serial logging) means day-to-day confirmation of this
+  feature still needs eyes on the actual OLED — there's no other way to
+  observe it from software.
+
+  Off-target sanity-checked the same way as the OUI table (temporarily
+  populated `SSID_TABLE`, ran prefix/substring/case-insensitivity/
+  empty-string cases, reverted to the shipped empty table) rather than a
+  permanent `test/test_ssid.cpp` — the shipped table is empty by design
+  (like `user_oui_table.cpp`), so there's nothing for a committed assertion
+  suite to exercise until real rows are added from field capture.
+
 ---
 
 ## Future ideas (beyond next iteration)
@@ -457,41 +652,15 @@ these are things discussed and worth keeping, but not queued for the current
 round of work. Same rule applies when they do get picked up: lock each open
 sub-decision before writing code.
 
-- **SSID matching from beacon frames and/or probe requests**, as a signal
-  independent of OUI matching. Discussed 2026-09-01. Not a reversal of
-  decision 5 (that was about not *dropping* frames with an empty SSID, not
-  about never using SSID content).
-
-  - **Beacon SSID** = the network name an AP broadcasts. Matching this against
-    a watchlist (e.g. a known agency network-naming pattern) is additive
-    coverage independent of whether that AP's OUI happens to be in the
-    watchlist at all.
-  - **Probe request SSID** = a client device leaking a network it previously
-    joined, not evidence the network is nearby now. Modern phone OSes
-    (iOS/Android, post ~2014-2017) mostly suppress directed probes now
-    (randomized MAC + wildcard/no-SSID probes), so this signal increasingly
-    only catches older/embedded hardware, not phones. Lower, shrinking value
-    versus beacon-SSID matching — worth doing but not the priority half of
-    this feature if only one gets built first.
-  - **Match semantics locked**: prefix-only (trailing wildcard), e.g.
-    `PSP-troop*` matches `PSP-troop7`, `PSP-troop8`, etc. Deliberately not
-    full glob (no leading/embedded wildcards) — narrower implementation
-    (plain `strncmp` against the pattern length, no regex/glob engine, no
-    dynamic allocation), matches the only concrete example raised, and easy
-    to extend later if a real case needs more than a trailing wildcard.
-  - **Case sensitivity locked**: case-sensitive exact-byte match. No
-    normalization needed.
-  - **Table shape**: a separate flat list of literal prefix strings, linear
-    scan per parsed SSID (not the OUI table's sorted/masked/binary-search
-    structure — that machinery is for MAC prefixes specifically, and a small
-    curated SSID list doesn't need it).
-  - **Still open, not yet locked**: (1) where the match runs — inline in the
-    `IRAM_ATTR` WiFi promiscuous callback (cheap, but that callback has an
-    explicit "keep it short" rule in Gotchas) vs. deferred to the main loop;
-    (2) whether an SSID hit alerts the same as an OUI hit or needs its own,
-    lower-trust handling — decision 7 no longer has a MEDIUM/HIGH scheme to
-    slot this into (removed 2026-09-02), so this needs a fresh answer, not a
-    reuse of the old one.
+- ~~SSID matching from beacon frames and/or probe requests~~ — **implemented
+  2026-09-05**, moved up into "Next iteration — planned changes" above (see
+  that entry for what shipped, including two locks below that it revised).
+  Original discussion (2026-09-01) is preserved there for context: the
+  beacon-vs-probe-request evidentiary distinction, and why probe requests
+  are lower-value against modern phones specifically (post ~2014-2017
+  iOS/Android mostly suppress directed probes — randomized MAC +
+  wildcard/no-SSID probes — so this increasingly only catches
+  older/embedded hardware). Do not re-propose from scratch.
 
 - **Custom PCB + custom enclosure.** Raised 2026-09-03. Explicitly deferred —
   not until the breadboard build has more bugs ironed out (phase timing,
@@ -529,6 +698,7 @@ include/
   alert.h         LED/buzzer state machine
   ui.h            OLED
   oui_table.h     OuiEntry, GearCategory, lookup
+  ssid_table.h    SsidEntry, SsidMatchMode, lookup
 src/
   main.cpp        setup/loop, WiFi<->BLE phase machine
   detector.cpp    BLE GAP callback, WiFi promiscuous handler, device table
@@ -537,6 +707,9 @@ src/
   oui_table.cpp   THE WATCHLIST
   user_oui_table.cpp  empty-by-default staging table for testing an OUI
                       locally before submitting it as a PR (see below)
+  ssid_table.cpp  empty-by-default SSID watchlist (prefix/substring,
+                  case-insensitive), matched against beacon/probe
+                  request/probe response frames independent of OUI
 ```
 
 All tuning lives in `config.h`. Prefer changing constants there over editing
@@ -584,8 +757,9 @@ needed — that's the whole reason EN is left unwired.
 Validate in this order; don't skip ahead when something fails.
 
 1. **Boot screen** — confirms OLED wiring, I2C address, u8g2. Shows the OUI
-   table size, so you can tell at a glance whether you flashed the table you
-   meant to.
+   table size and, as of 2026-09-05, the SSID watchlist size (`ssidTableSize()`
+   in `ui.cpp`), so you can tell at a glance whether you flashed the tables
+   you meant to.
 2. **Power-on self test** — LED + buzzer pulse ~120 ms in `setup()`. Confirms
    both outputs and that they fire together.
 3. **Radio phase indicator** — top-right of the display should alternate between
@@ -606,7 +780,13 @@ Validate in this order; don't skip ahead when something fails.
 5. **Alert path** — with only Axon in the table you likely won't trip it
    naturally. To test the LED/buzzer/display path, temporarily add the OUI of a
    device you own (phone hotspot, laptop) as a `CAT_OTHER` entry, confirm the
-   alert behaves, then remove it.
+   alert behaves, then remove it. The SSID path has the same kind of row
+   already sitting in `src/ssid_table.cpp` as of 2026-09-05 — `LEDET-TEST`,
+   `SSID_MATCH_PREFIX`, `CAT_OTHER` — spoof it by renaming a phone hotspot or
+   a saved WiFi profile to `LEDET-TEST` (anything with that prefix matches,
+   case-insensitively), confirm the second display line reads `SSID beacon:`
+   or `SSID probe:` and the alert fires the same as an OUI hit, then remove
+   the row before relying on this table for anything real.
 6. **Flash-rate scaling** — walk the test device closer/further and confirm the
    flash speeds up as RSSI rises.
 
