@@ -32,10 +32,62 @@
 // two-fragment-with-a-gap shape a glob would write as "IBR*-mobile". Still
 // no literal wildcard character or regex engine - just a third fixed shape.
 //
-// *** THIS TABLE CURRENTLY SHIPS WITH ONE LIVE ROW THAT IS TEST/DEMO DATA,
-// *** NOT A REAL VENDOR SIGNATURE - see the row itself below. Everything
-// *** else in this file is the real, empty-by-default watchlist design.
+// *** THIS TABLE NOW SHIPS WITH REAL FIELD-VERIFIED ENTRIES (Pennsylvania
+// *** State Police, added 2026-09-06 - see the PSP block below for full
+// *** provenance) ALONGSIDE ONE LIVE TEST/DEMO ROW (LEDET-TEST) THAT IS NOT
+// *** A REAL VENDOR SIGNATURE. Each row's own comment says which is which.
 static const SsidEntry SSID_TABLE[] = {
+    // -----------------------------------------------------------------
+    // PENNSYLVANIA STATE POLICE (PSP) - added 2026-09-06 from WiGLE survey
+    // data cross-checked against known PSP barracks coordinates.
+    //
+    // Three independent barracks, three different troops, 282 km apart:
+    //   Hamburg  (Troop L)        40.5641, -76.0025
+    //   Dunmore  (Scranton area)  41.4357, -75.6151
+    //   Bedford  (Troop G)        40.0063, -78.3855
+    // All observations were 48-132 m from the barracks building, all on
+    // Cisco hardware. Cross-site BSSID correlation (see per-row notes)
+    // confirms a single statewide deployment, not coincidental naming.
+    //
+    // KNOWN LIMITATION: these are fixed APs at barracks buildings, not
+    // vehicle-mounted. On the road, a hit here means a cruiser's in-car
+    // client is directedly probing for one of these SSIDs while out of
+    // range of the real AP - whether PSP in-car systems actually do that is
+    // UNTESTED in the field. Until verified, treat a hit on this block as a
+    // barracks-proximity indicator, not confirmed mobile detection.
+    //
+    // All four rows are PREFIX, deliberately - do not change any to
+    // CONTAINS. A CONTAINS "PSP" rule was tested against the same survey
+    // data and matched PSPPetCenter, PSPRETAIL, PSP Neighbor (a residence),
+    // and BPSPictureU, all within 730 m of the Hamburg barracks. The full
+    // prefix string, not the shared "PSP" fragment, is what makes these
+    // safe to alert on.
+
+    // Confirmed at all three sites above. Highest-value row: MVR is Mobile
+    // Video Recorder, PSP's in-car video system, so cruisers are configured
+    // for it by definition. Two Cisco OUIs seen across sites - 1C:FC:17 and
+    // 78:F1:C6 - both appearing at multiple barracks (two procurement
+    // batches mixed statewide, not two separate networks). Last observed
+    // 2026-08-25 and 2026-09-05 - current as of this writing.
+    { "PSP-MVR",  SSID_MATCH_PREFIX, "PSP in-car video",   CAT_BODYCAM, nullptr },
+
+    // Confirmed at all three sites above; tightest cross-site correlation
+    // of the four rows. Dunmore: 20:37:06:6D:69:7D / 20:37:06:A4:2C:4D.
+    // Bedford: 20:37:06:6D:72:0D / 20:37:06:A4:38:4D. Same two 20:37:06
+    // sub-ranges at both sites, both registered 2013.
+    { "PSP-TEST", SSID_MATCH_PREFIX, "PSP facility",       CAT_OTHER,   nullptr },
+
+    // Single-site only (Hamburg) - lower confidence than PSP-MVR/PSP-TEST
+    // above, which were each confirmed at three independent barracks. Not
+    // yet cross-checked against a second site.
+    { "PSPWLAN",  SSID_MATCH_PREFIX, "PSP facility",       CAT_OTHER,   nullptr },
+
+    // Single-site only (Hamburg), same caveat as PSPWLAN above - not yet
+    // cross-checked against a second site. Likely a Cisco Unified
+    // Communications (voice/VoIP) SSID, going by the name.
+    { "PSP_UC",   SSID_MATCH_PREFIX, "PSP facility voice", CAT_OTHER,   nullptr },
+    // -----------------------------------------------------------------
+
     // TEST/DEMO ONLY - NOT A REAL VENDOR SIGNATURE. Same purpose as bring-up
     // sequence step 5's "add the OUI of a device you own" for the OUI table:
     // spoof this by renaming a phone hotspot or a saved WiFi profile to

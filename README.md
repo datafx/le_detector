@@ -268,6 +268,53 @@ needing real LE gear nearby. Comment it out in `ssid_table.cpp` before
 relying on this table for anything real; real entries follow the same
 "comment out a row to disable" convention as the OUI table.
 
+### Complete list
+
+| Prefix | Vendor | Category |
+|---|---|---|
+| `PSP-MVR`  | PSP in-car video   | Body/car cam |
+| `PSP-TEST` | PSP facility       | Other |
+| `PSPWLAN`  | PSP facility       | Other |
+| `PSP_UC`   | PSP facility voice | Other |
+
+All four are prefix matches, deliberately — not substring. A substring
+`PSP` rule tested against the same survey data matched `PSPPetCenter`,
+`PSPRETAIL`, `PSP Neighbor` (a residence), and `BPSPictureU`, all within
+730 m of the Hamburg barracks below. The full prefix string, not the
+shared `PSP` fragment, is what makes these safe to alert on.
+
+### Provenance
+
+Confirmed via WiGLE survey data cross-checked against known Pennsylvania
+State Police barracks coordinates — three independent barracks spanning
+282 km across three different troops, every observation 48–132 m from the
+building, all on Cisco hardware:
+
+| Barracks | Troop | Coordinates |
+|---|---|---|
+| Hamburg | L | 40.5641, -76.0025 |
+| Dunmore (Scranton area) | — | 41.4357, -75.6151 |
+| Bedford | G | 40.0063, -78.3855 |
+
+`PSP-MVR` and `PSP-TEST` were each confirmed at all three sites above.
+Cross-site BSSID correlation — matching Cisco OUI and sub-range
+assignments across independently surveyed barracks, not just a shared
+naming convention — confirms a single statewide deployment rather than
+coincidence. `PSP-MVR` (Mobile Video Recorder, PSP's in-car video system)
+is the highest-value row, since cruisers are configured for it by
+definition, and was last observed 2026-08-25 and 2026-09-05 — current as
+of this writing. `PSPWLAN` and `PSP_UC` were observed at Hamburg only, so
+carry lower confidence than the other two until cross-checked against a
+second site.
+
+**Known limitation**: these are fixed APs at barracks buildings, not
+vehicle-mounted equipment. On the road, a hit here means a cruiser's
+in-car client is directedly probing for one of these SSIDs while out of
+range of the real AP — whether PSP in-car systems actually do that is
+**untested in the field**. Treat a hit on this block as a
+barracks-proximity indicator, not confirmed mobile detection, until
+that's verified.
+
 ## Known limits
 
 - **One radio.** WiFi and BLE cannot run at once. The firmware alternates
@@ -276,6 +323,9 @@ relying on this table for anything real; real entries follow the same
   carry a real OUI. Randomised addresses are skipped — their vendor bits are
   meaningless. This limits how much is detectable regardless of watchlist size.
   SSID matching runs independently of this and is unaffected.
+- **PSP SSID rows are barracks-proximity, not confirmed mobile detection.**
+  All four are fixed APs at barracks buildings — see SSID watchlist
+  Provenance above for the full caveat and why.
 - **SSID matching depends on what's actually broadcast.** A wildcard probe
   request or a hidden-SSID beacon carries no SSID bytes at all — nothing to
   match either way. Directed probe requests specifically are a declining

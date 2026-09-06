@@ -189,6 +189,24 @@ noted elsewhere in this file.
     already exclude Panasonic per decision 13 and see no reason to reverse
     that.
 
+  **SSID watchlist populated with real data for the first time, 2026-09-06**
+  — `src/ssid_table.cpp` had shipped with only the `LEDET-TEST` demo row
+  since the SSID-matching feature landed; it now also carries four
+  Pennsylvania State Police entries (`PSP-MVR`, `PSP-TEST`, `PSPWLAN`,
+  `PSP_UC`), sourced from WiGLE survey data cross-checked against known PSP
+  barracks coordinates — full site list, BSSID correlation, and the
+  substring-vs-prefix false-positive test are in the README's SSID
+  watchlist Provenance section and in the table's own comments; not
+  re-duplicated here. The one fact worth surfacing at this level: **these
+  are fixed barracks APs, not vehicle-mounted equipment, and whether a
+  cruiser's in-car client actually probes for them on the road is untested
+  in the field** — treat hits as barracks-proximity, not confirmed mobile
+  detection, until that's verified. All four rows are `SSID_MATCH_PREFIX`;
+  do not change any to `SSID_MATCH_CONTAINS` — a bare `PSP` substring rule
+  was tested against the same survey data and false-positived on a pet
+  center, a retail store, a residence, and an unrelated business, all
+  within 730 m of one barracks.
+
 - **Phase timing under real driving conditions.** 3.5 s WiFi + 3 s BLE plus
   ~200–400 ms of stack transitions means a ~7 s revisit interval. At 65 mph
   that's ~670 ft between looks at either band. Untested; may need shortening.
