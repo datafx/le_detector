@@ -6,8 +6,77 @@ signaling hits on an LED and buzzer, flashing faster as the signal strengthens.
 
 ## Build
 
+If you already have PlatformIO Core set up:
+
     pio run -t upload
     pio device monitor
+
+### Building from source if you're new to PlatformIO
+
+1. **Install PlatformIO.** Pick whichever fits how you like to work:
+   - **VS Code** (recommended if you'd rather not touch a terminal beyond
+     the basics): install [VS Code](https://code.visualstudio.com/), then
+     install the **PlatformIO IDE** extension from the Extensions panel
+     (search "platformio"). It downloads everything else it needs the
+     first time it runs — that can take a few minutes.
+   - **Command line:** install Python 3 if you don't already have it, then:
+
+         pip install --user platformio
+
+     (`pipx install platformio` works too, if that's your preference.)
+
+2. **Get the code:**
+
+         git clone https://github.com/datafx/le_detector.git
+         cd le_detector
+
+   No `git`? Click **Code → Download ZIP** on the GitHub page and extract
+   it instead.
+
+3. **Open the project.**
+   - VS Code: **File → Open Folder**, select the `le_detector` folder.
+     PlatformIO reads `platformio.ini` and configures itself for this
+     project automatically — nothing to set up by hand.
+   - Command line: just stay inside the `le_detector` directory; every
+     `pio` command below assumes that's your working directory.
+
+4. **Plug in the board** via micro-USB. Chip type, flash size, and the
+   partition table are already specified in `platformio.ini`, so there's
+   no board selection step.
+
+5. **Build and flash:**
+   - VS Code: click the checkmark icon in the bottom status bar to build,
+     then the right-arrow (→) icon to build *and* upload.
+   - Command line:
+
+         pio run -t upload
+
+   This should auto-detect the board and flash it without pressing
+   anything on the board itself — the DevKitC's onboard USB-serial chip
+   handles the reset. If upload fails with a timeout or "Failed to
+   connect": hold **BOOT**, tap **EN**, release **BOOT**, then retry (see
+   Gotchas in `CLAUDE.md` for why this is sometimes needed).
+
+6. **Watch it boot** (optional):
+
+         pio device monitor
+
+   This project doesn't do serial logging during normal operation — a
+   deliberate design choice, see `CLAUDE.md` — so past the initial boot
+   banner you won't see a running stream of output. That's expected, not
+   a sign something's broken; the OLED is the real status display.
+
+### If the board doesn't show up as a serial port
+
+- **Windows/macOS:** you may need the [CP210x USB-to-UART
+  driver](https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers)
+  from Silicon Labs — that's the DevKitC's onboard USB chip.
+- **Linux:** the port usually appears automatically (typically
+  `/dev/ttyUSB0`), but your user may need group membership to access it
+  without `sudo` — `dialout` on Debian/Ubuntu, `uucp` on Arch-based
+  distros. Add yourself and re-log-in for it to take effect:
+
+      sudo usermod -aG dialout $USER   # or: uucp, on Arch-based distros
 
 ## Wiring
 
