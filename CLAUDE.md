@@ -686,6 +686,40 @@ sub-decision before writing code.
   but it's the current direction — build the case to fit an off-the-shelf
   mount rather than design one from scratch.
 
+- **Second radio chip (e.g. nRF52840) for true simultaneous BLE+WiFi.**
+  Raised 2026-09-05. Would mean adding a dedicated BLE-only MCU alongside
+  the ESP32, talking to it over a simple link (UART is the obvious choice —
+  a couple of wires, no exotic protocol needed), so BLE scanning runs
+  continuously on its own hardware while the ESP32's radio stays dedicated
+  to WiFi full-time.
+
+  **This would be a direct revision of locked decision 2 ("one radio,
+  time-sliced"), not a supplement to it.** Decision 2 says plainly "do not
+  'fix' this by trying to run both — it isn't possible," which is true for
+  a single ESP32 radio — a second, physically separate radio sidesteps that
+  constraint rather than violating it, but it does mean the WiFi/BLE phase
+  machine (`PHASE_WIFI`/`PHASE_BLE` in `main.cpp`, `WIFI_PHASE_MS`/
+  `BLE_PHASE_MS` in `config.h`) would become largely unnecessary if this
+  were ever built — no more alternating, no more blind windows on either
+  band, no more revisit-interval tradeoff (the still-open phase-timing
+  question above would be moot for BLE specifically). That's a big enough
+  change that it isn't a small addition on top of the current architecture;
+  it would need its own pass through this file's locked decisions, not just
+  an appendix to them.
+
+  Nothing else here is decided — this is a raised idea, not a design.
+  Real open questions before any of this gets built: how the two MCUs'
+  detections merge into one shared alert/device-table model (right now
+  there's exactly one `TrackedDevice` table fed by one chip); whether the
+  nRF52840 needs its own OUI-matching firmware or just forwards raw
+  BLE advertisement data for the ESP32 to match centrally; power budget and
+  battery-life impact of a second always-on radio in what's meant to be a
+  simple in-vehicle device; and how it fits physically — this interacts
+  directly with the custom-PCB item above, since a second module needs its
+  own footprint, power rail, and connector, not something to bolt onto the
+  current breadboard/perfboard build. Not queued for the current round of
+  work; needs its own decision-locking pass if it ever is.
+
 ---
 
 ## Layout
