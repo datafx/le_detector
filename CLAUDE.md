@@ -177,6 +177,11 @@ noted elsewhere in this file.
   many radar heads aren't IP devices at all. 20 entries were cross-confirmed
   against nyanBOX's own (XOR-obfuscated) firmware list; see
   tools/decrypt_nyan_ouis.py and the README Provenance section.
+  **Note (2026-09-11): `tools/` was removed from GitHub and is local-only**
+  (`.gitignore`'d) — it deals with the nyanBOX firmware directly (extraction/
+  decryption scripts), which shouldn't be redistributed. The path above is
+  still valid on this machine; it just won't resolve for anyone cloning the
+  public repo.
 
   **Cross-checked 2026-09-04 against JakeSwiz/end-0f-watch's
   `police_ouis.json`** (github.com/JakeSwiz/end-0f-watch). Their list skews
