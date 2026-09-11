@@ -127,8 +127,22 @@ noted elsewhere in this file.
 
 13. **Excluded as too broad**: Dell and Panasonic. Toughbook/laptop MDTs are
     ubiquitous in patrol cars, but those prefixes sit on tens of millions of
-    consumer machines — a hit carries no information. Same reasoning for
-    Peplink, Jenoptik, Sensys Networks, TYT, Zetron, Codan, Simoco.
+    consumer machines — a hit carries no information. **Corrected 2026-09-11**:
+    this line previously also listed Peplink, Jenoptik, Sensys Networks, TYT,
+    Zetron, Codan, Simoco as excluded on the same reasoning, but that was
+    inaccurate — Codan (`00:12:E0`, `00:14:91`) and Simoco (`00:0E:06`,
+    `00:1A:08`) were never actually removed from `oui_table.cpp` and are
+    still live `SPEC_BROAD` rows today; Jenoptik/Sensys Networks/TYT/Zetron
+    were never verified either way. Only Peplink (`D4:13:F8`) and its sibling
+    brand Pepwave (`A8:C0:EA`) are actually commented out, and only as of
+    2026-09-11, per a field report of false-alarm-only, zero-true-positive
+    results — same category of problem as the CradlePoint flip under decision
+    7, but handled as a plain `//` comment in `oui_table.cpp` rather than an
+    `EXCLUDE_VENDOR_*` toggle, since each is a single row (see the
+    comment-out-to-disable convention documented directly above `OUI_TABLE`
+    in that file). Codan/Simoco/Jenoptik/Sensys Networks/TYT/Zetron are not
+    excluded and this file should stop claiming they are unless/until someone
+    actually does that work.
 
 12. **Name-collision exclusions** (documented in `oui_table.cpp`): WatchGuard
     Technologies (Seattle firewalls) vs WatchGuard Video (Plano, police video);

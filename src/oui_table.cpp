@@ -177,7 +177,8 @@ static const OuiEntry OUI_TABLE[] = {
 #ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0x9C,0x86,0x2B,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
 #endif
-  { { 0xA8,0xC0,0xEA,0x00,0x00 }, 24, "Pepwave",          CAT_VEHICLE,   SPEC_BROAD      },
+  // Disabled locally 2026-09-11: same company as Peplink above, same false-positive profile.
+  // { { 0xA8,0xC0,0xEA,0x00,0x00 }, 24, "Pepwave",          CAT_VEHICLE,   SPEC_BROAD      },
 #ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0xB8,0xE2,0x8C,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
 #endif
@@ -185,7 +186,8 @@ static const OuiEntry OUI_TABLE[] = {
 #ifndef EXCLUDE_VENDOR_SIERRA_WIRELESS
   { { 0xCC,0x93,0x4A,0x00,0x00 }, 24, "Sierra Wireless",  CAT_VEHICLE,   SPEC_BROAD      },
 #endif
-  { { 0xD4,0x13,0xF8,0x00,0x00 }, 24, "Peplink",          CAT_VEHICLE,   SPEC_BROAD      },
+  // Disabled locally 2026-09-11: false-positive-only, no true hits observed.
+  // { { 0xD4,0x13,0xF8,0x00,0x00 }, 24, "Peplink",          CAT_VEHICLE,   SPEC_BROAD      },
   { { 0xE0,0xDA,0xDC,0x00,0x00 }, 24, "JVC Kenwood",      CAT_RADIO,     SPEC_BROAD      },
   { { 0xE4,0x1E,0x0A,0xB0,0x00 }, 28, "Safety Vision",    CAT_BODYCAM,   SPEC_BROAD      },
   { { 0xF4,0x69,0xD5,0x70,0x00 }, 28, "Rosco Vision",     CAT_BODYCAM,   SPEC_BROAD      },
