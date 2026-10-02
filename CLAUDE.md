@@ -28,6 +28,10 @@ standalone embedded version of the same idea.
 
 ## Status
 
+**DEPRECATED as of 2026-10-02.** Superseded by
+<https://github.com/datafx/le_detector_c5>. This repo is kept for reference
+only; don't start new feature work here — do it in `le_detector_c5`.
+
 Builds, flashes, and has been through the full bring-up sequence below on real
 hardware: boot screen, POST, phase indicator, frame counter, a spoofed-MAC
 alert test (WiFi, Axon OUI), and flash-rate scaling with RSSI. All passed.

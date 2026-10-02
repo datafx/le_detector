@@ -1,5 +1,12 @@
 # LE Gear Detector — ESP32-WROOM-32U
 
+> [!WARNING]
+> **This project is deprecated and no longer maintained.**
+> Development has moved to the new, improved version:
+> **[datafx/le_detector_c5](https://github.com/datafx/le_detector_c5)**.
+> This repository is kept for reference only — please use, report issues
+> against, and contribute to `le_detector_c5` instead.
+
 Passive BLE + WiFi scanner. Watches for MAC OUIs on a vendor watchlist and
 SSIDs on a second watchlist (beacons, probe requests, probe responses),
 signaling hits on an LED and buzzer, flashing faster as the signal strengthens.
